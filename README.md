@@ -1,3 +1,19 @@
+REINVENTer 4
+==========
+REINVENTer 4 is an integrated program based on REINVENT4 by AZ. Many thanks for all contributers!!  
+After git clone and install the REINVENT4 from this folk, install some additional libraries by following command,
+```bash
+conda install -c conda-forge rdkit pubchempy streamlit requests chembl_webresource_client networkx mols2grid scikit-learn seaborn plotly
+```
+
+The program by written in python, so you can simply run the command as follows in `REINVENT4` directory to open the GUI.
+```bash:reinventer.py
+streamlit run reinventer.py
+```
+
+
+should check original README of REINVENT4 as follows,  
+
 REINVENT 4
 ==========
 
