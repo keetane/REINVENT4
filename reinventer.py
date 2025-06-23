@@ -4,6 +4,7 @@ import datetime # datetimeのインポートを統一
 from rdkit import Chem
 from rdkit.Chem import Draw, PandasTools
 import pandas as pd
+import io
 
 st.set_page_config(
     page_title="REINVENTer 4 Drug Discovery",
@@ -48,14 +49,6 @@ if 'all_users' not in st.session_state:
     else:
         st.session_state.wd = os.path.join(current_dir, "1_wd", "all_users")
 
-# # --- ディレクトリパスの構築と作成 ---
-# # ユーザーのホームディレクトリを展開し、REINVENT4/wdまでのベースパスを構築
-# base_path = os.path.expanduser(os.path.join("~", "Documents", "apps", "REINVENT4", "wd"))
-
-# # 最終的な作業ディレクトリパスを決定
-# # もしユーザーがサブフォルダ名を入力していればそれを結合、そうでなければベースパスのみ
-# st.session_state.wd = os.path.join(base_path, st.session_state.user_subfolder)
-
 # ディレクトリを作成 (既に存在すれば何もしない)
 wd = st.session_state.wd  # Use the working directory from session state
 os.makedirs(wd, exist_ok=True)
@@ -79,7 +72,6 @@ csv_files = []
 mols_path = None # Initialize mols_path
 
 # Debugging: Show the directory being searched
-
 if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search):
     for root, _, files in os.walk(results_dir_to_search):
         for f in files:
@@ -105,19 +97,42 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
             mols_path = csv_files[mols_path_index]
             # Debugging: Show the assigned mols_path
 
+            # sort options for the selectbox
+            desc = ['NLL', 'MW', 'LogP', 'HBD', 'HBA', 'TPSA', 'CtRtBonds', 'CtAmides', 'CtRings', 'CtAromaticRings']
+            sort_options=st.sidebar.selectbox(
+                "Sort by:",
+                options=desc,
+                index=0,  # Default to the first option
+                key="sort_selector"  # Unique key for the widget
+            )
+            sort_order = st.sidebar.toggle('Ascending order', key='sort_order', )  # Toggle for ascending/descending order
             # --- メインコンテンツの表示 ---
+            # csvの読み込み
             df = pd.read_csv(mols_path, sep=',', encoding='utf-8') if mols_path else pd.DataFrame()
-            df = df.sort_values(by='NLL', ascending=True)
+            df = df.sort_values(by=sort_options, ascending=sort_order)
+
+
+
+            # download button for CSV file
+            st.download_button(
+                label="Download CSV",
+                data=mols_path,
+                file_name=os.path.basename(mols_path) if mols_path else "molecules.csv",
+                mime="text/csv",
+                key="download_csv"
+            )
+            # 分子の表示
             df['ROMol'] = df['SMILES'].apply(lambda x : Chem.MolFromSmiles(x))
             # st.dataframe(df) if mols_path else st.info("CSVファイルが選択されていません。")
+
             img = Draw.MolsToGridImage(
                 df['ROMol'],
                 molsPerRow=3,
-                subImgSize=(300, 200),
+                subImgSize=(400, 300),
                 legends=df['NLL'].astype(str).tolist() if 'NLL' in df.columns else None
             )
 
-            st.image(img, caption="Molecules from the selected CSV file", use_column_width=True)
+            st.image(img, caption="Molecules from the selected CSV file")
 
         else:
             st.sidebar.info("CSVファイルをサイドバーから選択してください。")
@@ -126,6 +141,5 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
 else:
     st.sidebar.error("resultsディレクトリが見つからないか、アクセスできません。")
     st.error("resultsディレクトリが見つからないか、アクセスできません。")
-
 
 
