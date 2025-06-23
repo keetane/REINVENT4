@@ -102,6 +102,7 @@ overwrite = st.sidebar.checkbox("Overwrite", value=True)
 
 # Allow users to select a model file from priors_dir
 model_files = {
+    "Reinvent": reinvent,
     "High Similarity": mol2mol_high,
     "Medium Similarity": mol2mol_med,
     "MMP": mol2mol_mmp,
@@ -109,7 +110,6 @@ model_files = {
     "Scaffold": mol2mol_scaffold,
     "Similarity": mol2mol_similarity,
     "PubChem": pubchem,
-    "Reinvent": reinvent,
 }
 # model_file = [] #st.sidebar.selectbox("Model File", options=model_files.keys(), format_func=lambda x: x)
 selected_model_file = model_files['Reinvent'] # Reinventをデフォルト値として設定
@@ -494,7 +494,7 @@ if st.button("Sample from TL Model", key="sample_from_tl_model_btn"):
         selected_tl_model = st.session_state.tl_model_select
         toml_path, output_file = TL_toml_sampling( # TL_toml -> TL_toml_sampling に変更
             method=os.path.join(model_dir, selected_tl_model),
-            # smiles_file=f"{input_dir}/parent.smi", # コメントアウトされているので、そのまま
+            smiles_file=f"{input_dir}/parent.smi", # コメントアウトされているので、そのまま
             num_smiles=num_mols,
             device=device,
             show=False, # 引数として追加
