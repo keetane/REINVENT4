@@ -136,10 +136,65 @@ st.sidebar.header('mol2mol options')
 sample_stategies = st.sidebar.selectbox("Sampling Strategy", ["beamsearch", 'multinomial'])
 temperatures = st.sidebar.number_input("Temperature", min_value=0.0, max_value=1.0, value=1.0, step=0.1)
 
+# # Generate TOML file
+# def generate_toml(method=selected_model_file, num_smiles=num_mols, smiles_file=None, device=device, show=False, sample_strategy=None, temperature=1.0):
+#     if method == link:
+#         filename = 'LinkInvent'
+#     elif method == lib:
+#         filename = 'LibInvent'
+#     else:
+#         filename = method.split("/")[-1].replace(" ", "_")[:-6]
+        
+#     if overwrite is not True:
+#         filename = method.split("/")[-1].replace(" ", "_") + '_' + time
+#     else:
+#         pass
+#     output_file = os.path.join(results_dir, f"{filename}.csv")
+#     toml_content = f"""
+# run_type = "sampling"
+# device = "{device}"
+# json_out_config = "{sampling_log}/_sampling.json"
 
+# [parameters]
+# model_file = "{method}"
+# output_file = "{output_file}"
+# num_smiles = {num_smiles}
+# """
+#     if unique_molecules is True:
+#         toml_content += f'''
+#         unique_molecules = true
+#         '''
+#     if randomize_smiles is True:
+#         toml_content += f'''
+#         randomize_smiles = true
+#         '''
+#     if smiles_file is not None:
+#         toml_content += f'''
+#         smiles_file = "{smiles_file}"  # 1 compound per line
+#         '''
+#     # Fix: use toml_content instead of undefined toml
+#     if sample_strategy == 'beamsearch':
+#         toml_content += f'''
+#         sample_strategy = "beamsearch"  # multinomial or beamsearch (deterministic)
+#         '''
+#     elif sample_strategy == 'multinomial':
+#         toml_content += f'''
+#         sample_strategy = "multinomial"  # multinomial or beamsearch (deterministic)
+#         temperature = {temperature} # temperature in multinomial sampling
+#         '''
 
-# Generate TOML file
-def generate_toml(method=selected_model_file, num_smiles=num_mols, smiles_file=None, device=device, show=False, sample_strategy=None, temperature=1.0):
+#     toml_path = os.path.join(toml_dir, "sampling.toml")
+#     with open(toml_path, "w") as f:
+#         f.write(toml_content)
+#     return toml_path, output_file
+
+# # Run REINVENT4
+# def run_reinvent(toml_path):
+#     log_file = os.path.join(sampling_log, "sampling.log")
+#     subprocess.call(["reinvent", "-l", log_file, toml_path])
+
+# Generate TOML and run REINVENT4
+def reinvent(method=selected_model_file, num_smiles=num_mols, smiles_file=None, device=device, show=False, sample_strategy=None, temperature=1.0):
     if method == link:
         filename = 'LinkInvent'
     elif method == lib:
@@ -188,15 +243,26 @@ num_smiles = {num_smiles}
     toml_path = os.path.join(toml_dir, "sampling.toml")
     with open(toml_path, "w") as f:
         f.write(toml_content)
-    return toml_path, output_file
+    # return toml_path, output_file
 
-# Run REINVENT4
-def run_reinvent(toml_path):
+    # Run REINVENT4
     log_file = os.path.join(sampling_log, "sampling.log")
-    # subprocess.call([f"/Users/keetane/miniforge3/envs/r4/bin/reinvent", "-l", log_file, toml_path])
     subprocess.call(["reinvent", "-l", log_file, toml_path])
-
-
+    df = pd.read_csv(output_file, sep=',')
+    df['ROMol']= df['SMILES'].map(lambda x: Chem.MolFromSmiles(x))
+    # 分子のdescripterを追加
+    df['MW'] = df['ROMol'].map(lambda x: Chem.Descriptors.MolWt(x) if x else None)
+    df['LogP'] = df['ROMol'].map(lambda x: Chem.Descriptors.MolLogP(x) if x else None)
+    df['HBD'] = df['ROMol'].map(lambda x: Chem.Descriptors.NumHDonors(x) if x else None)
+    df['HBA'] = df['ROMol'].map(lambda x: Chem.Descriptors.NumHAcceptors(x) if x else None)
+    df['TPSA'] = df['ROMol'].map(lambda x: Chem.Descriptors.TPSA(x) if x else None)
+    df['CtRtbonds'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumRotatableBonds(x) if x else None)
+    df['CtRings'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumRings(x) if x else None)
+    df['CtAmides'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumAmideBonds(x) if x else None)
+    df['CtAromaticRings'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumAromaticRings(x) if x else None)
+    df['CtHeteroatoms'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumHeteroatoms(x) if x else None)
+    df.drop(columns=['ROMol'], inplace=True)  # Remove the ROMol column if not needed
+    df.to_csv(output_file, index=False)  # Save the updated DataFrame to CSV
 
 # 3columns for sampling
 st.header("ReInvent Sampling")
@@ -208,8 +274,8 @@ with col1:
     model_file = st.selectbox("Model File", options=model_files.keys(), format_func=lambda x: x)
     selected_model_file = model_files[model_file]
     if st.button('Mol2Mol Sampling from Parent', key="mol2mol_sampling_parent_btn"):
-        # Generate TOML file for mol2mol sampling
-        toml_path, output_file = generate_toml(
+        # Generate TOML file for LibInvent
+        reinvent(
             method=selected_model_file,
             smiles_file=f'{input_dir}/parent.smi',
             num_smiles=num_mols,
@@ -217,8 +283,6 @@ with col1:
             sample_strategy=sample_stategies,
             temperature=temperatures
         )
-        # Run REINVENT4
-        run_reinvent(toml_path)
         st.success("Sampling completed!")
 
 # LibInvent用の親分子を選択
@@ -238,14 +302,12 @@ with col2:
 
     if st.button('LibInvent Sampling', key="libinvent_sampling_btn"):
         # Generate TOML file for LibInvent
-        toml_path, output_file = generate_toml(
+        reinvent(
             method=lib,
             smiles_file=f'{input_dir}/child.smi',
             num_smiles=num_mols,
             device=device
         )
-        # Run REINVENT4
-        run_reinvent(toml_path)
         st.success("Sampling completed!")
 
 # LinkInvent用のwarheadを選択
@@ -257,21 +319,18 @@ with col3:
     if selected_warhead:
         selected_warhead_indices = [BB_namelist.index(w) for w in selected_warhead]
         selected_warhead_smiles_list = [warhead_smiless[i] for i in selected_warhead_indices]
-        # st.sidebar.text(f"Selected Warhead SMILES: {' | '.join(selected_warhead_smiles_list)}")
         with open(f"{input_dir}/warheads.smi", "w") as f:
             f.write('|'.join(selected_warhead_smiles_list))
     else:
         selected_warhead_smiles = ""
         st.text("No warhead selected.")
 
-    if st.button('LinkInvnet', key="linkinvent_sampling_btn"):
-        # Generate TOML file for LinkInvent
-        toml_path, output_file = generate_toml(
+    if st.button('LinkInvent Sampling', key="linkinvent_sampling_btn"):
+        # Generate TOML file for LibInvent
+        reinvent(
             method=link,
             smiles_file=f'{input_dir}/warheads.smi',
             num_smiles=num_mols,
             device=device
         )
-        # Run REINVENT4
-        run_reinvent(toml_path)
         st.success("Sampling completed!")
