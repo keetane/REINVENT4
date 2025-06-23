@@ -105,24 +105,99 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
                 index=0,  # Default to the first option
                 key="sort_selector"  # Unique key for the widget
             )
-            sort_order = st.sidebar.toggle('Ascending order', key='sort_order', )  # Toggle for ascending/descending order
+            sort_order = st.sidebar.toggle('Ascending order', key='sort_order', value=True)  # Toggle for ascending/descending order
             # --- メインコンテンツの表示 ---
             # csvの読み込み
             df = pd.read_csv(mols_path, sep=',', encoding='utf-8') if mols_path else pd.DataFrame()
             df = df.sort_values(by=sort_options, ascending=sort_order)
 
+            # filtering parameters
+            st.sidebar.markdown("# Filtering Parameters")
+            NLL= st.sidebar.select_slider(
+                "NLL",
+                options=list(range(int(df['NLL'].min()), int(df['NLL'].max()) + 1)),
+                value=(int(df['NLL'].min()), int(df['NLL'].max())),
+                key="nll_filter"
+            )
+            MW = st.sidebar.select_slider(
+                "MW",
+                options=list(range(int(df['MW'].min()), int(df['MW'].max()) + 1)),
+                value=(int(df['MW'].min()), int(df['MW'].max())),
+                key="mw_filter"
+            )
+            LogP = st.sidebar.select_slider(
+                "LogP",
+                options=list(range(int(df['LogP'].min()), int(df['LogP'].max()) + 1)),
+                value=(int(df['LogP'].min()), int(df['LogP'].max())),
+                key="logp_filter"
+            )
+            HBD = st.sidebar.select_slider(
+                "HBD",
+                options=list(range(int(df['HBD'].min()), int(df['HBD'].max()) + 1)),
+                value=(int(df['HBD'].min()), int(df['HBD'].max())),
+                key="hbd_filter"
+            )
+            HBA = st.sidebar.select_slider(
+                "HBA",
+                options=list(range(int(df['HBA'].min()), int(df['HBA'].max()) + 1)),
+                value=(int(df['HBA'].min()), int(df['HBA'].max())),
+                key="hba_filter"
+            )
+            TPSA = st.sidebar.select_slider(
+                "TPSA",
+                options=list(range(int(df['TPSA'].min()), int(df['TPSA'].max()) + 1)),
+                value=(int(df['TPSA'].min()), int(df['TPSA'].max())),
+                key="tpsa_filter"
+            )
+            CtRtBonds = st.sidebar.select_slider(
+                "CtRtBonds",
+                options=list(range(int(df['CtRtBonds'].min()), int(df['CtRtBonds'].max()) + 1)),
+                value=(int(df['CtRtBonds'].min()), int(df['CtRtBonds'].max())),
+                key="ctrb_filter"
+            )
+            CtAmides = st.sidebar.select_slider(
+                "CtAmides",
+                options=list(range(int(df['CtAmides'].min()), int(df['CtAmides'].max()) + 1)),
+                value=(int(df['CtAmides'].min()), int(df['CtAmides'].max())),
+                key="ctam_filter"
+            )
+            CtRings = st.sidebar.select_slider(
+                "CtRings",
+                options=list(range(int(df['CtRings'].min()), int(df['CtRings'].max()) + 1)),
+                value=(int(df['CtRings'].min()), int(df['CtRings'].max())),
+                key="ctr_filter"
+            )
+            CtAromaticRings = st.sidebar.select_slider(
+                "CtAromaticRings",
+                options=list(range(int(df['CtAromaticRings'].min()), int(df['CtAromaticRings'].max()) + 1)),
+                value=(int(df['CtAromaticRings'].min()), int(df['CtAromaticRings'].max())),
+                key="ctar_filter"
+            )
+            st.sidebar.text(CtAromaticRings)
 
+            # molfileの生成
+            df['ROMol'] = df['SMILES'].apply(lambda x : Chem.MolFromSmiles(x))
+            # filtering the dataframe based on the selected parameters
+            df = df[(df['NLL'] >= NLL[0]) & (df['NLL'] <= NLL[1])]
+            df = df[(df['MW'] >= MW[0]) & (df['MW'] <= MW[1])]
+            df = df[(df['LogP'] >= LogP[0]) & (df['LogP'] <= LogP[1])]
+            df = df[(df['HBD'] >= HBD[0]) & (df['HBD'] <= HBD[1])]
+            df = df[(df['HBA'] >= HBA[0]) & (df['HBA'] <= HBA[1])]
+            df = df[(df['TPSA'] >= TPSA[0]) & (df['TPSA'] <= TPSA[1])]
+            df = df[(df['CtRtBonds'] >= CtRtBonds[0]) & (df['CtRtBonds'] <= CtRtBonds[1])]
+            df = df[(df['CtAmides'] >= CtAmides[0]) & (df['CtAmides'] <= CtAmides[1])]
+            df = df[(df['CtRings'] >= CtRings[0]) & (df['CtRings'] <= CtRings[1])]
+            df = df[(df['CtAromaticRings'] >= CtAromaticRings[0]) & (df['CtAromaticRings'] <= CtAromaticRings[1])]
 
             # download button for CSV file
+            csv_files = df.drop(columns=['ROMol']).to_csv(index=False, encoding='utf-8')
             st.download_button(
                 label="Download CSV",
-                data=mols_path,
+                data=csv_files,
                 file_name=os.path.basename(mols_path) if mols_path else "molecules.csv",
                 mime="text/csv",
                 key="download_csv"
             )
-            # 分子の表示
-            df['ROMol'] = df['SMILES'].apply(lambda x : Chem.MolFromSmiles(x))
             # st.dataframe(df) if mols_path else st.info("CSVファイルが選択されていません。")
 
             img = Draw.MolsToGridImage(
