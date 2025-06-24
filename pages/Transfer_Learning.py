@@ -46,51 +46,6 @@ mol2mol_scaffold = os.path.join(priors_dir, "mol2mol_scaffold.prior")
 mol2mol_similarity = os.path.join(priors_dir, "mol2mol_similarity.prior")
 pubchem = os.path.join(priors_dir, "pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior")
 
-# # ここにサイドバー設定のコードを直接記述
-# st.sidebar.title("working directory")
-
-# # st.session_state.wd の初期化を確実に行う
-# # Streamlitのマルチページアプリでは、メインのファイルでsession_stateを初期化し、
-# # 各ページでそれを使うのが一般的です。
-# # もし 'wd' がまだセッションステートにない場合は、デフォルト値を設定します。
-# if 'wd' not in st.session_state:
-#     st.session_state.wd = os.path.expanduser("~/Documents/infomatics/reinvent_data") # デフォルト値を設定
-
-# st.sidebar.text(st.session_state.wd)
-
-# # Set up directories relative to the script's location
-# wd = st.session_state.wd  # Use the working directory from session state
-# wd = os.path.abspath(os.path.expanduser(wd))
-# os.makedirs(wd, exist_ok=True)  # Create directory if it doesn't exist
-# # script_dir = os.path.dirname(os.path.abspath(__file__))  # Get the script's directory
-# home_dir = os.path.expanduser("~")  # Get the user's home directory
-# # REINVENT4ディレクトリのパスを修正。絶対パスにする場合はスラッシュを最初につける
-# # 相対パス（home_dirからの相対）にするならスラッシュは不要
-# reinvent_dir = os.path.join(home_dir, "Documents", "apps", "REINVENT4")
-# input_dir = os.path.join(wd, 'input')  # Input directory path
-# os.makedirs(input_dir, exist_ok=True)  # Create input directory if it doesn't exist
-# model_dir = os.path.join(wd, 'model')  # Model directory path
-# os.makedirs(model_dir, exist_ok=True)  # Create model directory if it doesn't exist
-# results_dir = os.path.join(wd, 'results')  # Results directory path
-# os.makedirs(results_dir, exist_ok=True)  # Create results directory if it doesn't exist
-# toml_dir = os.path.join(wd, 'toml')  # TOML directory path
-# os.makedirs(toml_dir, exist_ok=True)  # Create TOML directory if it doesn't exist
-# sampling_log = os.path.join(results_dir, 'log')  # Sampling log directory path
-# os.makedirs(sampling_log, exist_ok=True)  # Create sampling log directory if it doesn't exist
-
-# # Set up file paths for priors
-# priors_dir = os.path.join(reinvent_dir, "priors")
-# reinvent = os.path.join(priors_dir, "reinvent.prior")
-# lib = os.path.join(priors_dir, "libinvent.prior")
-# link = os.path.join(priors_dir, "linkinvent.prior")
-# mol2mol_high = os.path.join(priors_dir, "mol2mol_high_similarity.prior")
-# mol2mol_med = os.path.join(priors_dir, "mol2mol_medium_similarity.prior")
-# mol2mol_mmp = os.path.join(priors_dir, "mol2mol_mmp.prior")
-# mol2mol_scaffold_generic = os.path.join(priors_dir, "mol2mol_scaffold_generic.prior")
-# mol2mol_scaffold = os.path.join(priors_dir, "mol2mol_scaffold.prior")
-# mol2mol_similarity = os.path.join(priors_dir, "mol2mol_similarity.prior")
-# pubchem = os.path.join(priors_dir, "pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior")
-
 # Sidebar for input parameters
 st.sidebar.header("Sampling Parameters")
 num_mols = st.sidebar.number_input("Number of SMILES", min_value=1, value=155)
