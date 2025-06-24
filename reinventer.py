@@ -98,7 +98,7 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
             # Debugging: Show the assigned mols_path
 
             # sort options for the selectbox
-            desc = ['NLL', 'MW', 'LogP', 'HBD', 'HBA', 'TPSA', 'CtRtBonds', 'CtAmides', 'CtRings', 'CtAromaticRings']
+            desc = ['NLL', 'MW', 'LogP', 'HBD', 'HBA', 'TPSA', 'CtRotB', 'CtAmides', 'CtRings', 'CtAromaticRings']
             sort_options=st.sidebar.selectbox(
                 "Sort by:",
                 options=desc,
@@ -149,10 +149,10 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
                 value=(int(df['TPSA'].min()), int(df['TPSA'].max())),
                 key="tpsa_filter"
             )
-            CtRtBonds = st.sidebar.select_slider(
-                "CtRtBonds",
-                options=list(range(int(df['CtRtBonds'].min()), int(df['CtRtBonds'].max()) + 1)),
-                value=(int(df['CtRtBonds'].min()), int(df['CtRtBonds'].max())),
+            CtRotBonds = st.sidebar.select_slider(
+                "CtRotBonds",
+                options=list(range(int(df['CtRotBonds'].min()), int(df['CtRotBonds'].max()) + 1)),
+                value=(int(df['CtRotBonds'].min()), int(df['CtRotBonds'].max())),
                 key="ctrb_filter"
             )
             CtAmides = st.sidebar.select_slider(
@@ -173,7 +173,6 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
                 value=(int(df['CtAromaticRings'].min()), int(df['CtAromaticRings'].max())),
                 key="ctar_filter"
             )
-            st.sidebar.text(CtAromaticRings)
 
             # molfileの生成
             df['ROMol'] = df['SMILES'].apply(lambda x : Chem.MolFromSmiles(x))
@@ -184,7 +183,7 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
             df = df[(df['HBD'] >= HBD[0]) & (df['HBD'] <= HBD[1])]
             df = df[(df['HBA'] >= HBA[0]) & (df['HBA'] <= HBA[1])]
             df = df[(df['TPSA'] >= TPSA[0]) & (df['TPSA'] <= TPSA[1])]
-            df = df[(df['CtRtBonds'] >= CtRtBonds[0]) & (df['CtRtBonds'] <= CtRtBonds[1])]
+            df = df[(df['CtRotBonds'] >= CtRotBonds[0]) & (df['CtRotBonds'] <= CtRotBonds[1])]
             df = df[(df['CtAmides'] >= CtAmides[0]) & (df['CtAmides'] <= CtAmides[1])]
             df = df[(df['CtRings'] >= CtRings[0]) & (df['CtRings'] <= CtRings[1])]
             df = df[(df['CtAromaticRings'] >= CtAromaticRings[0]) & (df['CtAromaticRings'] <= CtAromaticRings[1])]
