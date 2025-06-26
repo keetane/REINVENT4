@@ -177,22 +177,40 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
                 if val_range:
                     df = df[(df[col] >= val_range[0]) & (df[col] <= val_range[1])]
 
-            # download button for CSV file
-            csv_files = df.drop(columns=['ROMol']).to_csv(index=False, encoding='utf-8')
-            st.download_button(
-                label="Download CSV",
-                data=csv_files,
-                file_name=os.path.basename(mols_path) if mols_path else "molecules.csv",
-                mime="text/csv",
-                key="download_csv"
-            )
+            # --- メインコンテンツの表示 ---
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric(label="Molecules", value=len(df))
+
+            with col2:
+                csv_files = df.drop(columns=['ROMol']).to_csv(index=False, encoding='utf-8')
+                st.download_button(
+                    label="Download CSV",
+                    data=csv_files,
+                    file_name=os.path.basename(mols_path) if mols_path else "molecules.csv",
+                    mime="text/csv",
+                    key="download_csv"
+                )
+
+            with col3:
+                # SDFをストリームに書き出す
+                sdf_buffer = io.StringIO()
+                PandasTools.WriteSDF(df, sdf_buffer, molColName='ROMol', properties=df.columns.drop('ROMol').tolist())
+                st.download_button(
+                    label="Download SDF",
+                    data=sdf_buffer.getvalue().encode("utf-8"),
+                    file_name=os.path.basename(mols_path).replace('.csv', '.sdf') if mols_path else "molecules.sdf",
+                    mime="chemical/x-mdl-sdfile",
+                    key="download_sdf"
+                )
             # st.dataframe(df) if mols_path else st.info("CSVファイルが選択されていません。")
 
             img = Draw.MolsToGridImage(
                 df['ROMol'],
                 molsPerRow=3,
                 subImgSize=(400, 300),
-                legends=df['NLL'].astype(str).tolist() if 'NLL' in df.columns else None
+                legends=df[sort_options].astype(str).tolist() if sort_options in df.columns else None
             )
 
             st.image(img, caption="Molecules from the selected CSV file")
