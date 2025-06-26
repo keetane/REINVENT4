@@ -98,7 +98,7 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
             # Debugging: Show the assigned mols_path
 
             # sort options for the selectbox
-            desc = ['NLL', 'MW', 'LogP', 'HBD', 'HBA', 'TPSA', 'CtRotB', 'CtAmides', 'CtRings', 'CtAromaticRings']
+            desc = ['NLL', 'MW', 'LogP', 'HBD', 'HBA', 'TPSA', 'CtRotB', 'CtAmides', 'CtRings', 'CtAromaticRings', 'Tanimoto_Similarity_to_Parent']
             sort_options=st.sidebar.selectbox(
                 "Sort by:",
                 options=desc,
@@ -113,80 +113,69 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
 
             # filtering parameters
             st.sidebar.markdown("# Filtering Parameters")
-            NLL= st.sidebar.select_slider(
-                "NLL",
-                options=list(range(int(df['NLL'].min()), int(df['NLL'].max()) + 1)),
-                value=(int(df['NLL'].min()), int(df['NLL'].max())),
-                key="nll_filter"
-            )
-            MW = st.sidebar.select_slider(
-                "MW",
-                options=list(range(int(df['MW'].min()), int(df['MW'].max()) + 1)),
-                value=(int(df['MW'].min()), int(df['MW'].max())),
-                key="mw_filter"
-            )
-            LogP = st.sidebar.select_slider(
-                "LogP",
-                options=list(range(int(df['LogP'].min()), int(df['LogP'].max()) + 1)),
-                value=(int(df['LogP'].min()), int(df['LogP'].max())),
-                key="logp_filter"
-            )
-            HBD = st.sidebar.select_slider(
-                "HBD",
-                options=list(range(int(df['HBD'].min()), int(df['HBD'].max()) + 1)),
-                value=(int(df['HBD'].min()), int(df['HBD'].max())),
-                key="hbd_filter"
-            )
-            HBA = st.sidebar.select_slider(
-                "HBA",
-                options=list(range(int(df['HBA'].min()), int(df['HBA'].max()) + 1)),
-                value=(int(df['HBA'].min()), int(df['HBA'].max())),
-                key="hba_filter"
-            )
-            TPSA = st.sidebar.select_slider(
-                "TPSA",
-                options=list(range(int(df['TPSA'].min()), int(df['TPSA'].max()) + 1)),
-                value=(int(df['TPSA'].min()), int(df['TPSA'].max())),
-                key="tpsa_filter"
-            )
-            CtRotBonds = st.sidebar.select_slider(
-                "CtRotBonds",
-                options=list(range(int(df['CtRotBonds'].min()), int(df['CtRotBonds'].max()) + 1)),
-                value=(int(df['CtRotBonds'].min()), int(df['CtRotBonds'].max())),
-                key="ctrb_filter"
-            )
-            CtAmides = st.sidebar.select_slider(
-                "CtAmides",
-                options=list(range(int(df['CtAmides'].min()), int(df['CtAmides'].max()) + 1)),
-                value=(int(df['CtAmides'].min()), int(df['CtAmides'].max())),
-                key="ctam_filter"
-            )
-            CtRings = st.sidebar.select_slider(
-                "CtRings",
-                options=list(range(int(df['CtRings'].min()), int(df['CtRings'].max()) + 1)),
-                value=(int(df['CtRings'].min()), int(df['CtRings'].max())),
-                key="ctr_filter"
-            )
-            CtAromaticRings = st.sidebar.select_slider(
-                "CtAromaticRings",
-                options=list(range(int(df['CtAromaticRings'].min()), int(df['CtAromaticRings'].max()) + 1)),
-                value=(int(df['CtAromaticRings'].min()), int(df['CtAromaticRings'].max())),
-                key="ctar_filter"
-            )
+
+            filter_values = {}
+
+            # Define which columns are float and which are int
+            float_columns = ['NLL', 'MW', 'LogP', 'TPSA']
+            int_columns = ['HBD', 'HBA', 'CtRotBonds', 'CtAmides', 'CtRings', 'CtAromaticRings']
+
+            # Handle float columns with st.slider
+            for col in float_columns:
+                if col in df.columns and not df[col].isnull().all():
+                    min_val, max_val = float(df[col].min()), float(df[col].max())
+                    if min_val >= max_val:
+                        st.sidebar.text(f"{col}: {min_val:.2f} (single value)")
+                        filter_values[col] = (min_val, max_val)
+                    else:
+                        filter_values[col] = st.sidebar.slider(
+                            col,
+                            min_value=min_val,
+                            max_value=max_val,
+                            value=(min_val, max_val),
+                            key=f"{col}_filter"
+                        )
+
+            # Handle int columns with st.select_slider
+            for col in int_columns:
+                if col in df.columns and not df[col].isnull().all():
+                    min_val, max_val = int(df[col].min()), int(df[col].max())
+                    if min_val >= max_val:
+                        st.sidebar.text(f"{col}: {min_val} (single value)")
+                        filter_values[col] = (min_val, max_val)
+                    else:
+                        options = list(range(min_val, max_val + 1))
+                        filter_values[col] = st.sidebar.select_slider(
+                            col,
+                            options=options,
+                            value=(min_val, max_val),
+                            key=f"{col}_filter"
+                        )
+            
+            # Special handling for Tanimoto
+            if 'Tanimoto_Similarity_to_Parent' in df.columns and not df['Tanimoto_Similarity_to_Parent'].isnull().all():
+                col = 'Tanimoto_Similarity_to_Parent'
+                min_val, max_val = float(df[col].min()), float(df[col].max())
+                if min_val >= max_val:
+                    st.sidebar.text(f"Tanimoto Similarity: {min_val:.2f} (single value)")
+                    filter_values[col] = (min_val, max_val)
+                else:
+                    filter_values[col] = st.sidebar.slider(
+                        "Tanimoto Similarity to Parent",
+                        min_value=min_val,
+                        max_value=max_val,
+                        value=(min_val, max_val),
+                        step=0.01,
+                        key="tanimoto_filter"
+                    )
 
             # molfileの生成
             df['ROMol'] = df['SMILES'].apply(lambda x : Chem.MolFromSmiles(x))
+            
             # filtering the dataframe based on the selected parameters
-            df = df[(df['NLL'] >= NLL[0]) & (df['NLL'] <= NLL[1])]
-            df = df[(df['MW'] >= MW[0]) & (df['MW'] <= MW[1])]
-            df = df[(df['LogP'] >= LogP[0]) & (df['LogP'] <= LogP[1])]
-            df = df[(df['HBD'] >= HBD[0]) & (df['HBD'] <= HBD[1])]
-            df = df[(df['HBA'] >= HBA[0]) & (df['HBA'] <= HBA[1])]
-            df = df[(df['TPSA'] >= TPSA[0]) & (df['TPSA'] <= TPSA[1])]
-            df = df[(df['CtRotBonds'] >= CtRotBonds[0]) & (df['CtRotBonds'] <= CtRotBonds[1])]
-            df = df[(df['CtAmides'] >= CtAmides[0]) & (df['CtAmides'] <= CtAmides[1])]
-            df = df[(df['CtRings'] >= CtRings[0]) & (df['CtRings'] <= CtRings[1])]
-            df = df[(df['CtAromaticRings'] >= CtAromaticRings[0]) & (df['CtAromaticRings'] <= CtAromaticRings[1])]
+            for col, val_range in filter_values.items():
+                if val_range:
+                    df = df[(df[col] >= val_range[0]) & (df[col] <= val_range[1])]
 
             # download button for CSV file
             csv_files = df.drop(columns=['ROMol']).to_csv(index=False, encoding='utf-8')

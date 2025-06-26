@@ -457,6 +457,22 @@ if st.button("Sample from TL Model", key="sample_from_tl_model_btn"):
             temperature=temperatures
         )
         run_reinvent(toml_path)
+
+        # 分子のdescripterを追加
+        df = pd.read_csv(output_file, sep=',')
+        df['ROMol']= df['SMILES'].map(lambda x: Chem.MolFromSmiles(x))
+        df['MW'] = df['ROMol'].map(lambda x: Chem.Descriptors.MolWt(x) if x else None)
+        df['LogP'] = df['ROMol'].map(lambda x: Chem.Descriptors.MolLogP(x) if x else None)
+        df['HBD'] = df['ROMol'].map(lambda x: Chem.Descriptors.NumHDonors(x) if x else None)
+        df['HBA'] = df['ROMol'].map(lambda x: Chem.Descriptors.NumHAcceptors(x) if x else None)
+        df['TPSA'] = df['ROMol'].map(lambda x: Chem.Descriptors.TPSA(x) if x else None)
+        df['CtRotBonds'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumRotatableBonds(x) if x else None)
+        df['CtRings'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumRings(x) if x else None)
+        df['CtAmides'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumAmideBonds(x) if x else None)
+        df['CtAromaticRings'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumAromaticRings(x) if x else None)
+        df['CtHeteroatoms'] = df['ROMol'].map(lambda x: Chem.rdMolDescriptors.CalcNumHeteroatoms(x) if x else None)
+        df.drop(columns=['ROMol'], inplace=True)  # Remove the ROMol column if not needed
+        df.to_csv(output_file, index=False)  # Save the updated DataFrame to CSV
         st.success(f"Sampling from TL model {selected_tl_model} completed!")
     else:
         st.warning("Please select a TL Model first.")

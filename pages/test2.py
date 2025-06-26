@@ -3,7 +3,7 @@ import subprocess
 import pandas as pd
 import streamlit as st
 from rdkit import Chem
-from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors
+from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors, DataStructs
 import pubchempy as pcp
 from datetime import datetime
 
@@ -212,6 +212,15 @@ num_smiles = {num_smiles}
     df['CtAmides']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAmideBonds(m)     if m else None)
     df['CtAromaticRings']      = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAromaticRings(m)  if m else None)
     df['CtHetAromaticRings']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumHeteroatoms(m)    if m else None)
+
+    # Calculate Tanimoto Similarity with parent molecule
+    parent_smiles = st.session_state.smiles
+    parent_mol = Chem.MolFromSmiles(parent_smiles)
+    if parent_mol:
+        parent_fp = Chem.RDKFingerprint(parent_mol)
+        df['Tanimoto_Similarity_to_Parent'] = df['ROMol'].map(lambda m: DataStructs.TanimotoSimilarity(Chem.RDKFingerprint(m), parent_fp) if m else None)
+    else:
+        df['Tanimoto_Similarity_to_Parent'] = None
 
     df.drop(columns=['ROMol'], inplace=True)
     df.to_csv(output_csv, index=False)
