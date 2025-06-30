@@ -207,10 +207,10 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
             # st.dataframe(df) if mols_path else st.info("CSVファイルが選択されていません。")
 
             img = Draw.MolsToGridImage(
-                df['ROMol'],
+                df['ROMol'].head(100),
                 molsPerRow=3,
                 subImgSize=(400, 300),
-                legends=df[sort_options].astype(str).tolist() if sort_options in df.columns else None
+                legends=df[sort_options].head(100).astype(str).tolist() if sort_options in df.columns else None
             )
 
             st.image(img, caption="Molecules from the selected CSV file")
