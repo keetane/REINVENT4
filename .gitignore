@@ -24,5 +24,4 @@ mprofile_*.dat
 
 # Notebooks
 .ipynb_checkpoints/
-*.ipynb
 1_wd/

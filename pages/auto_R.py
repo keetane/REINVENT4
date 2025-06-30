@@ -91,34 +91,6 @@ with col2:
     else:
         st.warning("Invalid SMILES: 構造を生成できません")
 
-# # ─── Parent Molecule Drawer ──────────────────────────────────────────────────
-# st.header("Parent Molecule Drawer")
-
-# if 'compound_name' not in st.session_state:
-#     st.session_state.compound_name = "ruxolitinib"
-# if 'smiles' not in st.session_state:
-#     st.session_state.smiles = "C1CCC(C1)[C@@H](CC#N)N2C=C(C=N2)C3=C4C=CNC4=NC=N3"
-
-# compound_name = st.text_input("Enter compound name", value=st.session_state.compound_name)
-# if st.button("Fetch SMILES from PubChem"):
-#     try:
-#         new = pcp.get_compounds(compound_name, 'name')[0].isomeric_smiles
-#         st.session_state.smiles = new
-#         st.session_state.compound_name = compound_name
-#         st.success(f"Fetched SMILES for {compound_name}")
-#     except Exception as e:
-#         st.error(f"Error fetching SMILES: {e}")
-
-# smiles = st.text_area("SMILES", value=st.session_state.smiles, height=80)
-# st.session_state.smiles = smiles
-
-# mol_parent = Chem.MolFromSmiles(smiles)
-# if mol_parent:
-#     st.image(Draw.MolToImage(mol_parent, size=(300,300)), caption="Parent Molecule")
-
-# with open(os.path.join(input_dir, "parent.smi"), "w") as f:
-#     f.write(smiles + "\n")
-
 # ─── Recap Decomposition ─────────────────────────────────────────────────────
 st.header("Children by Recap Decomposition")
 recap_tree = Recap.RecapDecompose(mol_parent)

@@ -3,7 +3,7 @@ import subprocess
 import pandas as pd
 import streamlit as st
 from rdkit import Chem
-from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors
+from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors, DataStructs
 import pubchempy as pcp
 from datetime import datetime
 
@@ -39,7 +39,7 @@ priors = {
     "scaffold":     os.path.join(priors_dir, "mol2mol_scaffold.prior"),
     "similarity":   os.path.join(priors_dir, "mol2mol_similarity.prior"),
     "PubChem":      os.path.join(priors_dir, "pubchem_ecfp4_with_count_with_rank_reinvent4_dict_voc.prior"),
-    "Reinvent":     os.path.join(priors_dir, "reinvent.prior"),
+    # "Reinvent":     os.path.join(priors_dir, "reinvent.prior"),
 }
 
 # ─── Parent Molecule Drawer (2:1 Split) ────────────────────────────────────────
@@ -90,34 +90,6 @@ with col2:
         st.image(img, caption="Parent Molecule")
     else:
         st.warning("Invalid SMILES: 構造を生成できません")
-
-# # ─── Parent Molecule Drawer ──────────────────────────────────────────────────
-# st.header("Parent Molecule Drawer")
-
-# if 'compound_name' not in st.session_state:
-#     st.session_state.compound_name = "ruxolitinib"
-# if 'smiles' not in st.session_state:
-#     st.session_state.smiles = "C1CCC(C1)[C@@H](CC#N)N2C=C(C=N2)C3=C4C=CNC4=NC=N3"
-
-# compound_name = st.text_input("Enter compound name", value=st.session_state.compound_name)
-# if st.button("Fetch SMILES from PubChem"):
-#     try:
-#         new = pcp.get_compounds(compound_name, 'name')[0].isomeric_smiles
-#         st.session_state.smiles = new
-#         st.session_state.compound_name = compound_name
-#         st.success(f"Fetched SMILES for {compound_name}")
-#     except Exception as e:
-#         st.error(f"Error fetching SMILES: {e}")
-
-# smiles = st.text_area("SMILES", value=st.session_state.smiles, height=80)
-# st.session_state.smiles = smiles
-
-# mol_parent = Chem.MolFromSmiles(smiles)
-# if mol_parent:
-#     st.image(Draw.MolToImage(mol_parent, size=(300,300)), caption="Parent Molecule")
-
-# with open(os.path.join(input_dir, "parent.smi"), "w") as f:
-#     f.write(smiles + "\n")
 
 # ─── Recap Decomposition ─────────────────────────────────────────────────────
 st.header("Children by Recap Decomposition")
@@ -213,6 +185,15 @@ num_smiles = {num_smiles}
     df['CtAromaticRings']      = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAromaticRings(m)  if m else None)
     df['CtHetAromaticRings']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumHeteroatoms(m)    if m else None)
 
+    # Calculate Tanimoto Similarity with parent molecule
+    parent_smiles = st.session_state.smiles
+    parent_mol = Chem.MolFromSmiles(parent_smiles)
+    if parent_mol:
+        parent_fp = Chem.RDKFingerprint(parent_mol)
+        df['Tanimoto_Similarity_to_Parent'] = df['ROMol'].map(lambda m: DataStructs.TanimotoSimilarity(Chem.RDKFingerprint(m), parent_fp) if m else None)
+    else:
+        df['Tanimoto_Similarity_to_Parent'] = None
+
     df.drop(columns=['ROMol'], inplace=True)
     df.to_csv(output_csv, index=False)
 
@@ -224,19 +205,41 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Mol2Mol Sampling")
-    model_key        = st.selectbox("Model", list(priors.keys()), index=0)
-    selected_prior   = priors[model_key]
-    if st.button("Run Mol2Mol", key="mol2mol"):
-        out = run_reinvent(
-            # method       = priors["mol2mol_high"],
-            method       = selected_prior,
-            smiles_file  = os.path.join(input_dir, "parent.smi"),
-            num_smiles   = num_mols,
-            device       = device,
-            sample_strategy = sample_strategy,
-            temperature     = temperature
-        )
-        st.success(f"Mol2Mol sampling done: {out}")
+    model_key = st.selectbox("Model", list(priors.keys()), index=0)
+    selected_prior = priors[model_key]
+
+    # 2列でボタンを並べる
+    mol2mol_col1, mol2mol_col2 = st.columns(2)
+
+    with mol2mol_col1:
+        if st.button("Run Mol2Mol", key="mol2mol"):
+            out = run_reinvent(
+                method=selected_prior,
+                smiles_file=os.path.join(input_dir, "parent.smi"),
+                num_smiles=num_mols,
+                device=device,
+                sample_strategy=sample_strategy,
+                temperature=temperature
+            )
+            st.success(f"Mol2Mol sampling done: {out}")
+
+    with mol2mol_col2:
+        if st.button("All Model Sampling", key="all_models"):
+            status_placeholder = st.empty()  # 空の表示枠を作成
+            for name, model_path in priors.items():
+                try:
+                    out = run_reinvent(
+                        method=model_path,
+                        smiles_file=os.path.join(input_dir, "parent.smi"),
+                        num_smiles=num_mols,
+                        device=device,
+                        sample_strategy=sample_strategy,
+                        temperature=temperature
+                    )
+                    status_placeholder.success(f"{name} sampling done: {out}")
+                except Exception as e:
+                    status_placeholder.error(f"Error in {name}: {e}")
+
 
 with col2:
     st.subheader("LibInvent Sampling")
