@@ -5,6 +5,7 @@ import streamlit as st
 from rdkit import Chem
 from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors, DataStructs
 import pubchempy as pcp
+import requests 
 from datetime import datetime
 
 # ─── Page & Session State Setup ──────────────────────────────────────────────
@@ -42,6 +43,47 @@ priors = {
     # "Reinvent":     os.path.join(priors_dir, "reinvent.prior"),
 }
 
+# --- 新しいSMILES取得関数 ---
+def get_simple_smiles(query, query_type='name'):
+    try:
+        # PubChemPyでCIDを取得
+        compound = pcp.get_compounds(query, query_type)[0]
+        cid = compound.cid
+
+        # PubChem Pug REST APIを直接呼び出し
+        api_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/JSON"
+        response = requests.get(api_url)
+        response.raise_for_status() # HTTPエラーが発生した場合に例外を発生させる
+        data = response.json()
+        
+        # 応答からSMILESを抽出
+        compound_data = data['PC_Compounds'][0]
+        smiles_options = {
+            'Isomeric': None,
+            'Absolute': None,
+            'Canonical': None,
+            'Connectivity': None
+        }
+
+        for prop in compound_data['props']:
+            if prop['urn']['label'] == 'SMILES':
+                smiles_name = prop['urn']['name']
+                if smiles_name in smiles_options:
+                    smiles_options[smiles_name] = prop['value']['sval']
+        
+        # 優先順位: Isomeric -> Absolute -> Canonical -> Connectivity
+        if smiles_options['Isomeric']:
+            return smiles_options['Isomeric']
+        elif smiles_options['Absolute']:
+            return smiles_options['Absolute']
+        elif smiles_options['Canonical']:
+            return smiles_options['Canonical']
+        else: # Connectivity
+            return smiles_options['Connectivity']
+    except Exception as e:
+        st.error(f"SMILESの取得中にエラーが発生しました: {e}. 化合物名を確認してください。")
+        return None
+
 # ─── Parent Molecule Drawer (2:1 Split) ────────────────────────────────────────
 st.header("Parent Molecule Drawer")
 
@@ -55,20 +97,25 @@ with col1:
     if 'smiles' not in st.session_state:
         st.session_state.smiles = "C1CCC(C1)[C@@H](CC#N)N2C=C(C=N2)C3=C4C=CNC4=NC=N3"
 
-    # 分子名入力
-    compound_name = st.text_input(
+    def fetch_smiles_from_pubchem_on_enter():
+        current_compound_name = st.session_state.compound_name_input
+        if current_compound_name:
+            new_smiles = get_simple_smiles(current_compound_name, 'name')
+            if new_smiles:
+                st.session_state.smiles = new_smiles
+                st.session_state.compound_name = current_compound_name
+                st.success(f"Fetched SMILES for {current_compound_name}")
+            # get_simple_smiles関数内でエラーハンドリングが行われるため、ここでは成功メッセージのみ
+        else:
+            st.warning("Compound name cannot be empty.")
+
+    # 分子名入力 (エンターキーでSMILESを取得)
+    st.text_input(
         "Enter compound name",
-        value=st.session_state.compound_name
+        value=st.session_state.compound_name,
+        on_change=fetch_smiles_from_pubchem_on_enter,
+        key="compound_name_input" # on_changeで参照するためのキー
     )
-    # 取得ボタン
-    if st.button("Fetch SMILES from PubChem"):
-        try:
-            new_smiles = pcp.get_compounds(compound_name, 'name')[0].isomeric_smiles
-            st.session_state.smiles = new_smiles
-            st.session_state.compound_name = compound_name
-            st.success(f"Fetched SMILES for {compound_name}")
-        except Exception as e:
-            st.error(f"Error fetching SMILES: {e}")
 
     # SMILES 入力／編集
     smiles = st.text_area(
@@ -93,34 +140,42 @@ with col2:
 
 # ─── Recap Decomposition ─────────────────────────────────────────────────────
 st.header("Children by Recap Decomposition")
-recap_tree = Recap.RecapDecompose(mol_parent)
+# mol_parentがNoneの場合に備える
+if mol_parent:
+    recap_tree = Recap.RecapDecompose(mol_parent)
 
-warhead_mols, warhead_smis = [], []
-child_mols,   child_smis   = [], []
+    warhead_mols, warhead_smis = [], []
+    child_mols,   child_smis   = [], []
 
-def relabel_dummy_atoms(mol, map_num=1):
-    rw = Chem.RWMol(mol)
-    for atom in rw.GetAtoms():
-        if atom.GetAtomicNum() == 0:
-            atom.SetAtomMapNum(map_num)
-    return rw.GetMol()
+    def relabel_dummy_atoms(mol, map_num=1):
+        rw = Chem.RWMol(mol)
+        for atom in rw.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(map_num)
+        return rw.GetMol()
 
-for node in recap_tree.children.values():
-    m = node.mol
-    warhead_mols.append(m)
-    warhead_smis.append(Chem.MolToSmiles(m))
-    child = relabel_dummy_atoms(m, map_num=1)
-    child_mols.append(child)
-    child_smis.append(Chem.MolToSmiles(child))
+    for node in recap_tree.children.values():
+        m = node.mol
+        warhead_mols.append(m)
+        warhead_smis.append(Chem.MolToSmiles(m))
+        child = relabel_dummy_atoms(m, map_num=1)
+        child_mols.append(child)
+        child_smis.append(Chem.MolToSmiles(child))
 
-BB_namelist = [f"BB{i+1}" for i in range(len(warhead_mols))]
-if warhead_mols:
-    st.image(
-        Draw.MolsToGridImage(
-            warhead_mols, molsPerRow=3, subImgSize=(600,300), legends=BB_namelist
-        ),
-        caption="Recap Fragments"
-    )
+    BB_namelist = [f"BB{i+1}" for i in range(len(warhead_mols))]
+    if warhead_mols:
+        st.image(
+            Draw.MolsToGridImage(
+                warhead_mols, molsPerRow=3, subImgSize=(600,300), legends=BB_namelist
+            ),
+            caption="Recap Fragments"
+        )
+else:
+    st.info("親分子が選択されていないか、SMILESが不正なため、Recap分解は表示されません。")
+    warhead_mols, warhead_smis = [], [] # 空リストを初期化
+    child_mols,   child_smis   = [], [] # 空リストを初期化
+    BB_namelist = [] # 空リストを初期化
+
 
 # ─── Sidebar: Sampling Parameters ─────────────────────────────────────────────
 st.sidebar.header("Sampling Parameters")
@@ -185,16 +240,9 @@ num_smiles = {num_smiles}
     df['CtAromaticRings']      = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAromaticRings(m)  if m else None)
     df['CtHetAromaticRings']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumHeteroatoms(m)    if m else None)
 
-    # Calculate Tanimoto Similarity with parent molecule
-    parent_smiles = st.session_state.smiles
-    parent_mol = Chem.MolFromSmiles(parent_smiles)
-    if parent_mol:
-        parent_fp = Chem.RDKFingerprint(parent_mol)
-        df['Tanimoto_Similarity_to_Parent'] = df['ROMol'].map(lambda m: DataStructs.TanimotoSimilarity(Chem.RDKFingerprint(m), parent_fp) if m else None)
-    else:
-        df['Tanimoto_Similarity_to_Parent'] = None
-
-    df.drop(columns=['ROMol'], inplace=True)
+    # Tanimoto Similarityの計算は削除されました
+    # df.drop(columns=['ROMol'], inplace=True) # ROMolは後で削除する
+    df.drop(columns=['ROMol'], inplace=True) # ROMolカラムはここで削除する
     df.to_csv(output_csv, index=False)
 
     return output_csv
@@ -243,32 +291,40 @@ with col1:
 
 with col2:
     st.subheader("LibInvent Sampling")
-    choice = st.multiselect("Select Child", BB_namelist, default=BB_namelist[:1], key="child_sel")
-    if choice:
-        idx = BB_namelist.index(choice[0])
-        with open(os.path.join(input_dir, "child.smi"), "w") as f:
-            f.write(child_smis[idx] + "\n")
-    if st.button("Run LibInvent", key="libinv"):
-        out = run_reinvent(
-            method      = os.path.join(priors_dir, "libinvent.prior"),
-            smiles_file = os.path.join(input_dir, "child.smi"),
-            num_smiles  = num_mols,
-            device      = device
-        )
-        st.success(f"LibInvent sampling done: {out}")
+    # RecapDecomposeが成功した場合のみBB_namelistが生成されるため、チェックを追加
+    if BB_namelist:
+        choice = st.multiselect("Select Child", BB_namelist, default=BB_namelist[:1], key="child_sel")
+        if choice:
+            idx = BB_namelist.index(choice[0])
+            with open(os.path.join(input_dir, "child.smi"), "w") as f:
+                f.write(child_smis[idx] + "\n")
+        if st.button("Run LibInvent", key="libinv"):
+            out = run_reinvent(
+                method      = os.path.join(priors_dir, "libinvent.prior"),
+                smiles_file = os.path.join(input_dir, "child.smi"),
+                num_smiles  = num_mols,
+                device      = device
+            )
+            st.success(f"LibInvent sampling done: {out}")
+    else:
+        st.info("LibInventサンプリングには親分子のRecap分解が必要です。")
 
 with col3:
     st.subheader("LinkInvent Sampling")
-    choice = st.multiselect("Select Warheads", BB_namelist, default=BB_namelist[:2], key="warhead_sel")
-    if choice:
-        war_smis = [warhead_smis[BB_namelist.index(w)] for w in choice]
-        with open(os.path.join(input_dir, "warheads.smi"), "w") as f:
-            f.write("|".join(war_smis))
-    if st.button("Run LinkInvent", key="linkinv"):
-        out = run_reinvent(
-            method      = os.path.join(priors_dir, "linkinvent.prior"),
-            smiles_file = os.path.join(input_dir, "warheads.smi"),
-            num_smiles  = num_mols,
-            device      = device
-        )
-        st.success(f"LinkInvent sampling done: {out}")
+    # RecapDecomposeが成功した場合のみBB_namelistが生成されるため、チェックを追加
+    if BB_namelist:
+        choice = st.multiselect("Select Warheads", BB_namelist, default=BB_namelist[:2], key="warhead_sel")
+        if choice:
+            war_smis = [warhead_smis[BB_namelist.index(w)] for w in choice]
+            with open(os.path.join(input_dir, "warheads.smi"), "w") as f:
+                f.write("|".join(war_smis))
+        if st.button("Run LinkInvent", key="linkinv"):
+            out = run_reinvent(
+                method      = os.path.join(priors_dir, "linkinvent.prior"),
+                smiles_file = os.path.join(input_dir, "warheads.smi"),
+                num_smiles  = num_mols,
+                device      = device
+            )
+            st.success(f"LinkInvent sampling done: {out}")
+    else:
+        st.info("LinkInventサンプリングには親分子のRecap分解が必要です。")

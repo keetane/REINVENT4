@@ -5,6 +5,7 @@ import streamlit as st
 from rdkit import Chem
 from rdkit.Chem import Draw, Recap, Descriptors, rdMolDescriptors, DataStructs
 import pubchempy as pcp
+import requests # requestsモジュールの追加
 from datetime import datetime
 
 # ─── Page & Session State Setup ──────────────────────────────────────────────
@@ -42,6 +43,47 @@ priors = {
     "Reinvent":     os.path.join(priors_dir, "reinvent.prior"),
 }
 
+# --- 新しいSMILES取得関数 ---
+def get_simple_smiles(query, query_type='name'):
+    try:
+        # PubChemPyでCIDを取得
+        compound = pcp.get_compounds(query, query_type)[0]
+        cid = compound.cid
+
+        # PubChem Pug REST APIを直接呼び出し
+        api_url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/{cid}/JSON"
+        response = requests.get(api_url)
+        response.raise_for_status() # HTTPエラーが発生した場合に例外を発生させる
+        data = response.json()
+        
+        # 応答からSMILESを抽出
+        compound_data = data['PC_Compounds'][0]
+        smiles_options = {
+            'Isomeric': None,
+            'Absolute': None,
+            'Canonical': None,
+            'Connectivity': None
+        }
+
+        for prop in compound_data['props']:
+            if prop['urn']['label'] == 'SMILES':
+                smiles_name = prop['urn']['name']
+                if smiles_name in smiles_options:
+                    smiles_options[smiles_name] = prop['value']['sval']
+        
+        # 優先順位: Isomeric -> Absolute -> Canonical -> Connectivity
+        if smiles_options['Isomeric']:
+            return smiles_options['Isomeric']
+        elif smiles_options['Absolute']:
+            return smiles_options['Absolute']
+        elif smiles_options['Canonical']:
+            return smiles_options['Canonical']
+        else: # Connectivity
+            return smiles_options['Connectivity']
+    except Exception as e:
+        st.error(f"SMILESの取得中にエラーが発生しました: {e}. 化合物名を確認してください。")
+        return None
+
 # ─── Parent Molecule Drawer (2:1 Split) ────────────────────────────────────────
 st.header("Parent Molecule Drawer")
 
@@ -55,20 +97,25 @@ with col1:
     if 'smiles' not in st.session_state:
         st.session_state.smiles = "C1CCC(C1)[C@@H](CC#N)N2C=C(C=N2)C3=C4C=CNC4=NC=N3"
 
-    # 分子名入力
-    compound_name = st.text_input(
+    def fetch_smiles_from_pubchem_on_enter():
+        current_compound_name = st.session_state.compound_name_input
+        if current_compound_name:
+            new_smiles = get_simple_smiles(current_compound_name, 'name')
+            if new_smiles:
+                st.session_state.smiles = new_smiles
+                st.session_state.compound_name = current_compound_name
+                st.success(f"Fetched SMILES for {current_compound_name}")
+            # get_simple_smiles関数内でエラーハンドリングが行われるため、ここでは成功メッセージのみ
+        else:
+            st.warning("Compound name cannot be empty.")
+
+    # 分子名入力 (エンターキーでSMILESを取得)
+    st.text_input(
         "Enter compound name",
-        value=st.session_state.compound_name
+        value=st.session_state.compound_name,
+        on_change=fetch_smiles_from_pubchem_on_enter,
+        key="compound_name_input" # on_changeで参照するためのキー
     )
-    # 取得ボタン
-    if st.button("Fetch SMILES from PubChem"):
-        try:
-            new_smiles = pcp.get_compounds(compound_name, 'name')[0].isomeric_smiles
-            st.session_state.smiles = new_smiles
-            st.session_state.compound_name = compound_name
-            st.success(f"Fetched SMILES for {compound_name}")
-        except Exception as e:
-            st.error(f"Error fetching SMILES: {e}")
 
     # SMILES 入力／編集
     smiles = st.text_area(
