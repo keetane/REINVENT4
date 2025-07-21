@@ -36,7 +36,8 @@ REINVENTerは、サイドバーからアクセスできる複数のページで�
 本アプリケーションを実行するには、以下のライブラリが必要です。
 
 ```bash
-pip install streamlit pandas rdkit pubchempy chembl_webresource_client
+conda install -y -c conda-forge streamlit pandas rdkit pubchempy chembl_webresource_client scipy mpi4py 
+pip install gypsum_dl
 ```
 
 また、`reinvent` コマンドが実行可能な環境（例: `conda` 環境）が設定されている必要があります。
