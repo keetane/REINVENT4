@@ -239,10 +239,9 @@ num_smiles = {num_smiles}
     df['CtAmides']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAmideBonds(m)     if m else None)
     df['CtAromaticRings']      = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumAromaticRings(m)  if m else None)
     df['CtHetAromaticRings']   = df['ROMol'].map(lambda m: rdMolDescriptors.CalcNumHeteroatoms(m)    if m else None)
+    df['n_member_ring'] = df['ROMol'].map(lambda m: max((len(r) for r in m.GetRingInfo().AtomRings()), default=0) if m else None)
 
-    # Tanimoto Similarityの計算は削除されました
-    # df.drop(columns=['ROMol'], inplace=True) # ROMolは後で削除する
-    df.drop(columns=['ROMol'], inplace=True) # ROMolカラムはここで削除する
+    df.drop(columns=['ROMol'], inplace=True) 
     df.to_csv(output_csv, index=False)
 
     return output_csv

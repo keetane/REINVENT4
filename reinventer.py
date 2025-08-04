@@ -118,7 +118,7 @@ if os.path.exists(results_dir_to_search) and os.path.isdir(results_dir_to_search
 
             # Define which columns are float and which are int
             float_columns = ['NLL', 'MW', 'LogP', 'TPSA']
-            int_columns = ['HBD', 'HBA', 'CtRotBonds', 'CtAmides', 'CtRings', 'CtAromaticRings']
+            int_columns = ['HBD', 'HBA', 'CtRotBonds', 'CtAmides', 'CtRings', 'CtAromaticRings', 'n_member_ring']
 
             # Handle float columns with st.slider
             for col in float_columns:
