@@ -1,0 +1,459 @@
+{
+  "version": "1",
+  "metadata": {
+    "marimo_version": "0.18.4"
+  },
+  "cells": [
+    {
+      "id": "MJUe",
+      "code_hash": "e925067ad46d4369922fd7bb85e4b460",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h1 id=\"de-novo-reinforcement-learning-with-the-reinvent-prior\"><em>De novo</em> Reinforcement Learning with the Reinvent prior</h1>\n<span class=\"paragraph\">This is a short demo to</span>\n<ul>\n<li>Set up a reinforcement  learning run</li>\n<li>Carry out a reinforcement  learning run</li>\n<li>Visualize the results with TensorBoard</li>\n<li>Extract the raw data from TensorBoard and how to work with it</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "bkHC",
+      "code_hash": "4555e1653345cc4437f6bd34264d6df6",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"set-up-the-reinvent-run\">Set up the REINVENT run</h2>\n<span class=\"paragraph\">A work directory is defined and created anew (all previous data deleted if the directory already exists).  The prior file is taken from the REINVENT repository and the agent is initially the same as the prior.  A TOML configuration is written out to file in the work directory.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "PKri",
+      "code_hash": "1d5f1c1be06d1aae310e8e86344385bc",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"delete-existing-working-directory\">Delete existing working directory (!)</h3>\n<span class=\"paragraph\">Skip this step if you have already carried out the RL run but wish to analyse the results further.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "SFPL",
+      "code_hash": "b56b644f73f9538d7d2791470da65910",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"global-configuration-parameters\">Global configuration parameters</h3>\n<span class=\"paragraph\">Parameters global to the run:</span>\n<ul>\n<li>The run type: one of \"scoring\", \"sampling\", \"transfer_learning\", and \"staged_learning\"</li>\n<li>The device to run on: \"cpu\" or \"cuda:0\" where the number is the device index (needed for ROCm)</li>\n<li>The output directory for TensorBoard (optional)</li>\n<li>The configuration file in JSON format (optional)</li>\n</ul></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "RGSE",
+      "code_hash": "8ac506a7b5a72b575527d172c0707928",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"parameters\">Parameters</h3>\n<span class=\"paragraph\">Here we specify the model files, the prefix for the output CSV summary file and the batch size for sampling and stochastic gradient descent (SGD).  The batch size is often given in 2^N but there is in now way required.  Typically batch sizes are between 50 and 150.  Batch size effects on SGD and so also the learning rate.  Some experimentation may be required to adjust this but keep in mind that, say, raising the total score as fast as possible is not necessarily the best choice as this may hamper exploration.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "emfo",
+      "code_hash": "166be944407d5e48562430715c52ec6f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"reinforcement-learning-strategy\">Reinforcement Learning strategy</h3></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nWHF",
+      "code_hash": "d99f391a767e18137a50b6917080e937",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"stage-setup\">Stage setup</h3>\n<span class=\"paragraph\">Here we only use a single stage. The aim of this stage is to create an agent which is highly likely to generate \"drug-like\" molecules (as per QED and Custom Alerts) with no stereocentres</span>\n<span class=\"paragraph\">The stage will terminate when a maximum number of 300 steps is reached.  Termination could occur earlier when the maximum score of 1.0 is exceeded but this is very unlikely to occur.  A checkpoint file is written out which can be used as the agent in a subsequent stage.</span>\n<span class=\"paragraph\">The scoring function is a weighted product of all the scoring components: QED and number of sterecentres.  The latter is used here to avoid stereocentres as they are not supported by the Reinvent prior.  Zero stereocentres aids in downstream 3D task to avoid having to carry out stereocentre enumeration.  Custom alerts is a filter which filters out (scores as zero) all generated compounds which match one of the SMARTS patterns.  Number of sterecentres uses a transformation function to ensure the component score is between 0 and 1.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ROlb",
+      "code_hash": "c8fa2b23335ef852630b77553c172484",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"start-reinforcement-learning\">Start Reinforcement Learning</h2>\n<span class=\"paragraph\">This run will take several minutes to finish and timings are provided at the end of the run.  After the run the TensorBoard output can be used to inspect the results of the run</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TqIu",
+      "code_hash": "e094c24f10bc90f03bfb5a7f77ec3f88",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"inspect-results-with-tensorboard\">Inspect results with TensorBoard</h3>\n<span class=\"paragraph\">TensorBoard needs to be started after REINVENT has finished.  Scatter plots of all scoring components are shown (raw and transformed) in the <em>SCALARS</em> tab as well as loss and fractions of valid and duplicate (per batch) SMILES.  The <em>IMAGES</em> tab shows the first sampled molecules for each recorded RL step labelled with the total score for the molecule.</span>\n<span class=\"paragraph\">The loss likelihoods (negative log likelihoods, NLL) for the agent is expected to move away from the prior NLL and also have smaller NLLs than the prior.  This shows that the agent is increasingly producing molecules different from the prior, closer to the signal from the scoring function as requested.  For sample efficiency it is desirable to observed few duplicates and a high number of valid molecules.  Note that results are stochastic and will not be different in every run of RL, even with exactly the same configuration.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "DnEU",
+      "code_hash": "90185a80c57332ad1c48eb0b7a69708f",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"extract-data-from-tensorboard\">Extract data from TensorBoard</h2>\n<span class=\"paragraph\">TensorBoard data can be directly extracted as shown in this section.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ulZA",
+      "code_hash": "b28f11ddc7e42fbce6e97bcb4585613b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"load-the-tb-data\">Load the TB data</h3></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Pvdt",
+      "code_hash": "4fcfce5b105f356650b03892bd139771",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"plot-all-scalars\">Plot all scalars</h3>\n<span class=\"paragraph\">All scalar values (except the raw components) are plotted here.  The data is also return as a Pandas dataframe and can so be conveniently used for further analysis or storing to a file.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "nHfw",
+      "code_hash": "dea6b7a8ddb042d74b1d5dcf714d2f1a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"display-an-image-from-tb\">Display an image from TB</h3>\n<span class=\"paragraph\">Shows (only) the last image from TB.  The image depicts the first 30 molecules generated in the very last step of RL:</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "AjVT",
+      "code_hash": "6f70e8f49ff8bdf95987913d4f8050a3",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h2 id=\"extract-data-from-the-csv-file\">Extract data from the CSV file</h2>\n<span class=\"paragraph\">The CSV file is generated during the RL run in real time i.e. as soon as the data is available it is written to file. So even if the RL job crashes in the middle of the run some partial data will be available.  The TensorBoard data is a subset of the data in the CSV file.  The CSV file contains in addition all SMILES strings, their state (0=invalid, 1=valid, 2=batch duplicate), the scaffold if a diversity filter has been used.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "NCOB",
+      "code_hash": "59d5b63183605434ae4f3ee56b74ab1c",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"sample-efficiency\">Sample efficiency</h3>\n<span class=\"paragraph\">Count the number of total invalid and duplicate SMILES and compare to the total number of generated SMILES.</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "TRpd",
+      "code_hash": "1e72c79e9a056e077259b60e05076061",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"display-all-generated-duplicates\">Display all generated duplicates</h3></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "dNNg",
+      "code_hash": "c75714a7d9eb58a83dd1934de8636406",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"display-the-molecules-from-the-last-step\">Display the molecules from the last step</h3></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "wlCL",
+      "code_hash": "10d41bafbde2f23245dfe8a862dbc74d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/markdown": "<span class=\"markdown prose dark:prose-invert contents\"><h3 id=\"plot-the-nlls\">Plot the NLLs</h3>\n<span class=\"paragraph\">The \"Target\" is the \"augmented NLL\".</span></span>"
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hbol",
+      "code_hash": "5d1879833e3d8338a7dad81b19a077d7",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "vblA",
+      "code_hash": "72d7f1a8bf078a6b3c046ba1e4dfc33d",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "lEQa",
+      "code_hash": "29b1dd899bb0e3abdb34c1b4938aaaf4",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Xref",
+      "code_hash": "96667be7f5b5e1ec3a66a20384ad3e5b",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "BYtC",
+      "code_hash": "cb0bfc784c70a6388e46ce3db2966aad",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Kclp",
+      "code_hash": "2a1354b44cbed1b7aa455a0071ad4772",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "Hstk",
+      "code_hash": "4b793016b5c6ee8ea65c3086771f992a",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "iLit",
+      "code_hash": "c41ef30d094502a344c2edaeadfcae01",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ZHCJ",
+      "code_hash": "5be1729eda4b3e61750a1a54d860f9fd",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "qnkX",
+      "code_hash": "0be686db07080509a46cd7335d95fc92",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/html": "<pre class='text-xs'>1</pre>"
+          }
+        }
+      ],
+      "console": [
+        {
+          "type": "stream",
+          "name": "stderr",
+          "text": "Traceback (most recent call last):\n  File \"/Users/keetane/miniforge3/envs/r4/bin/reinvent\", line 8, in <module>\n    sys.exit(main_script())\n  File \"/Users/keetane/Documents/apps/REINVENT4/reinvent/Reinvent.py\", line 195, in main_script\n    main(args)\n  File \"/Users/keetane/Documents/apps/REINVENT4/reinvent/Reinvent.py\", line 73, in main\n    input_config = config_parse.read_config(args.config_filename, fmt)\n  File \"/Users/keetane/Documents/apps/REINVENT4/reinvent/utils/config_parse.py\", line 203, in read_config\n    with open(filename, \"rb\") as tf:\nFileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/R4_notebooks_output/toml_config_filename'\n",
+          "mimetype": "text/plain"
+        }
+      ]
+    },
+    {
+      "id": "Vxnm",
+      "code_hash": "e5dae585bf6a483841d3c5e235a0a454",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    },
+    {
+      "id": "ecfG",
+      "code_hash": "3a5a25509c7c8d3e8158cc33da41975d",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "ZBYS",
+      "code_hash": "103608648bfd255d4fb60ca86a5a3049",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aLJB",
+      "code_hash": "eff7d5dba32b4da32d9a67a519434d3f",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "xXTn",
+      "code_hash": "5f99e589648d4ad267f6d4eabdf64a8e",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "pHFh",
+      "code_hash": "4065eb7c8ca04ac60630d03c238df421",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "aqbW",
+      "code_hash": "2184d339712299b83ea49432ad3c8356",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "TXez",
+      "code_hash": "a99ca4c70ca98220fcc91788c06ab592",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "yCnT",
+      "code_hash": "5e65f7408fb7521233767b06d8e3711d",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "kqZH",
+      "code_hash": "9cb17d2696a17bfe79855934bd4054ef",
+      "outputs": [],
+      "console": []
+    },
+    {
+      "id": "wAgl",
+      "code_hash": "1d0db38904205bec4d6f6f6a1f6cec3e",
+      "outputs": [
+        {
+          "type": "data",
+          "data": {
+            "text/plain": ""
+          }
+        }
+      ],
+      "console": []
+    }
+  ]
+}
