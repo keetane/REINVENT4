@@ -1,6 +1,5 @@
 __pycache__
 *.pyc
-package.json
 .vscode
 tags
 .idea
@@ -26,3 +25,16 @@ mprofile_*.dat
 .ipynb_checkpoints/
 1_wd/
 smina.py
+
+# REINVENT4 web application
+/jobs.db
+/jobs.db-shm
+/jobs.db-wal
+/jobs/
+/webapp/backend/.venv/
+/webapp/.run/
+/webapp/frontend/node_modules/
+/webapp/frontend/dist/
+/webapp/frontend/coverage/
+/webapp/frontend/test-results/
+/webapp/frontend/*.tsbuildinfo
