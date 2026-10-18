@@ -68,7 +68,7 @@ export function QsarPanel({ onCreated }: Props) {
   const [primaryMetric, setPrimaryMetric] = useState("rmse");
   const [comparisonJobId, setComparisonJobId] = useState<string | null>(null);
   const [comparison, setComparison] = useState<QsarComparisonResult | null>(null);
-  const [comparisonSort, setComparisonSort] = useState<"metric" | "time" | "algorithm">("metric");
+  const [comparisonSort, setComparisonSort] = useState<"metric" | "algorithm">("metric");
   const [fingerprint, setFingerprint] = useState("morgan");
   const [featureMode, setFeatureMode] = useState("fingerprint");
   const [splitMethod, setSplitMethod] = useState("scaffold");
@@ -324,7 +324,33 @@ export function QsarPanel({ onCreated }: Props) {
       {error && <p className="notice error" role="alert">{error}</p>}
       <button className="button primary large" type="button" onClick={() => void start()} disabled={busy || !content || !smilesColumn || !targetColumn || !comment || !inspection?.valid_count || (mode === "comparison" && selectedAlgorithms.length < 2)}>{busy ? t("qsar.busy") : mode === "comparison" ? t("qsar.compare") : t("qsar.start")}</button>
 
-      {comparison && <section className="model-management"><div className="section-heading compact"><div><p className="section-kicker">MODEL COMPARISON</p><h3>{t("qsar.results")}</h3><p>{t("qsar.recommended", { algorithm: comparison.recommended_algorithm, metric: comparison.primary_metric })}</p></div><label className="comparison-sort">{t("qsar.sortOrder")}<select value={comparisonSort} onChange={(event) => setComparisonSort(event.target.value as typeof comparisonSort)}><option value="metric">{t("qsar.primary")}</option><option value="time">{t("qsar.trainingTime")}</option><option value="algorithm">{t("qsar.modelName")}</option></select></label></div><div className="qsar-preview"><table><thead><tr><th>{t("qsar.model")}</th><th>{t("qsar.status")}</th><th>{t("qsar.cvMean")}</th><th>Test</th><th>{t("qsar.gap")}</th><th>{t("qsar.inAd")}</th><th>{t("qsar.inferenceRate")}</th><th>{t("qsar.time")}</th><th>{t("qsar.register")}</th></tr></thead><tbody>{sortComparison(comparison, comparisonSort).map((result) => { const cv = result.metrics?.cross_validation?.[comparison.primary_metric]; const std = result.metrics?.cross_validation?.[`${comparison.primary_metric}_std`]; const test = result.metrics?.test?.[comparison.primary_metric]; const gap = result.metrics?.performance_gap?.[comparison.primary_metric]; return <tr key={result.algorithm}><td>{result.algorithm}{result.algorithm === comparison.recommended_algorithm ? " ★" : ""}</td><td>{result.status === "completed" ? t("qsar.success") : t("qsar.failure", { error: result.error ?? "" })}</td><td>{typeof cv === "number" ? `${cv.toFixed(4)} ± ${typeof std === "number" ? std.toFixed(4) : "—"}` : "—"}</td><td>{typeof test === "number" ? test.toFixed(4) : "—"}</td><td>{typeof gap === "number" ? gap.toFixed(4) : "—"}</td><td>{typeof result.metrics?.applicability_domain_fraction === "number" ? `${(result.metrics.applicability_domain_fraction * 100).toFixed(1)}%` : "—"}</td><td>{typeof result.metrics?.inference_molecules_per_second === "number" ? result.metrics.inference_molecules_per_second.toFixed(1) : "—"}</td><td>{t("qsar.seconds", { value: result.duration_seconds.toFixed(2) })}</td><td>{result.status === "completed" && comparisonJobId && <button type="button" className="button quiet" onClick={() => void registerQsarComparisonModel(comparisonJobId, result.algorithm, `${comment}_${result.algorithm}`.slice(0, 50)).then(refreshModels).catch((reason) => setError(message(reason, t("qsar.error"))))}>{t("qsar.registerModel")}</button>}</td></tr>; })}</tbody></table></div><ComparisonCharts comparison={comparison} /></section>}
+      {comparison && <section className="model-management comparison-analysis-section">
+        <div className="section-heading compact">
+          <div><p className="section-kicker">MODEL COMPARISON</p><h3>{t("qsar.results")}</h3><p>{t("qsar.recommended", { algorithm: comparison.recommended_algorithm, metric: comparison.primary_metric })}</p></div>
+          <label className="comparison-sort">{t("qsar.sortOrder")}<select value={comparisonSort} onChange={(event) => setComparisonSort(event.target.value as typeof comparisonSort)}><option value="metric">{t("qsar.primary")}</option><option value="algorithm">{t("qsar.modelName")}</option></select></label>
+        </div>
+        <div className="qsar-preview comparison-result-table-wrap"><table>
+          <thead><tr><th>{t("qsar.model")}</th><th>{t("qsar.status")}</th><th>{t("qsar.cvMean")}</th><th>Test</th><th>{t("qsar.testR2")}</th><th>{t("qsar.gap")}</th><th>{t("qsar.inAd")}</th><th>{t("qsar.register")}</th></tr></thead>
+          <tbody>{sortComparison(comparison, comparisonSort).map((result) => {
+            const cv = result.metrics?.cross_validation?.[comparison.primary_metric];
+            const std = result.metrics?.cross_validation?.[`${comparison.primary_metric}_std`];
+            const test = result.metrics?.test?.[comparison.primary_metric];
+            const testR2 = result.metrics?.test?.r2;
+            const gap = result.metrics?.performance_gap?.[comparison.primary_metric];
+            return <tr key={result.algorithm}>
+              <td>{result.algorithm}{result.algorithm === comparison.recommended_algorithm ? " ★" : ""}</td>
+              <td>{result.status === "completed" ? t("qsar.success") : t("qsar.failure", { error: result.error ?? "" })}</td>
+              <td>{typeof cv === "number" ? `${cv.toFixed(4)} ± ${typeof std === "number" ? std.toFixed(4) : "—"}` : "—"}</td>
+              <td>{typeof test === "number" ? test.toFixed(4) : "—"}</td>
+              <td>{typeof testR2 === "number" ? testR2.toFixed(4) : "—"}</td>
+              <td>{typeof gap === "number" ? gap.toFixed(4) : "—"}</td>
+              <td>{typeof result.metrics?.applicability_domain_fraction === "number" ? `${(result.metrics.applicability_domain_fraction * 100).toFixed(1)}%` : "—"}</td>
+              <td>{result.status === "completed" && comparisonJobId && <button type="button" className="button quiet" onClick={() => void registerQsarComparisonModel(comparisonJobId, result.algorithm, `${comment}_${result.algorithm}`.slice(0, 50)).then(refreshModels).catch((reason) => setError(message(reason, t("qsar.error"))))}>{t("qsar.registerModel")}</button>}</td>
+            </tr>;
+          })}</tbody>
+        </table></div>
+        <ComparisonCharts comparison={comparison} />
+      </section>}
 
       <section className="model-management">
         <div className="section-heading compact"><div><p className="section-kicker">MODEL REGISTRY</p><h3>{t("qsar.registry")}</h3></div><button type="button" className="button quiet" onClick={() => void refreshModels()}>{t("jobs.refresh")}</button></div>
@@ -348,10 +374,9 @@ function MiniPlot({ name, points }: { name: string; points: number[][] }) {
   return <figure><figcaption>{name.replaceAll("_", " ")}</figcaption><svg viewBox="0 0 200 100" role="img" aria-label={name}><line x1="12" y1="88" x2="188" y2="88" /><line x1="12" y1="12" x2="12" y2="88" />{points.map((point, index) => <circle key={index} cx={mapX(point[0])} cy={mapY(point[1])} r="2.5" />)}</svg></figure>;
 }
 
-function sortComparison(comparison: QsarComparisonResult, sort: "metric" | "time" | "algorithm") {
+function sortComparison(comparison: QsarComparisonResult, sort: "metric" | "algorithm") {
   const results = [...comparison.results];
   if (sort === "algorithm") return results.sort((a, b) => a.algorithm.localeCompare(b.algorithm));
-  if (sort === "time") return results.sort((a, b) => a.duration_seconds - b.duration_seconds);
   const direction = ["rmse", "mae"].includes(comparison.primary_metric) ? 1 : -1;
   return results.sort((a, b) => {
     const av = a.metrics?.cross_validation?.[comparison.primary_metric];
@@ -361,11 +386,19 @@ function sortComparison(comparison: QsarComparisonResult, sort: "metric" | "time
 }
 
 function ComparisonCharts({ comparison }: { comparison: QsarComparisonResult }) {
+  const { t } = useTranslation();
   const completed = comparison.results.filter((result) => result.status === "completed");
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState(comparison.recommended_algorithm);
+  useEffect(() => setSelectedAlgorithm(comparison.recommended_algorithm), [comparison]);
   const values = completed.map((result) => ({ name: result.algorithm, value: Number(result.metrics?.cross_validation?.[comparison.primary_metric]) }));
   const finite = values.filter((item) => Number.isFinite(item.value));
   const max = Math.max(...finite.map((item) => Math.abs(item.value)), 1);
-  const recommended = completed.find((result) => result.algorithm === comparison.recommended_algorithm);
-  const folds = recommended?.metrics?.cross_validation?.[`${comparison.primary_metric}_values`];
-  return <div className="comparison-charts"><figure><figcaption>Cross-validation {comparison.primary_metric}</figcaption><div className="comparison-bars">{finite.map((item) => <div key={item.name}><span>{item.name}</span><i style={{ width: `${Math.max(2, Math.abs(item.value) / max * 100)}%` }} /><b>{item.value.toFixed(4)}</b></div>)}</div></figure>{Array.isArray(folds) && <MiniPlot name={`recommended_cv_${comparison.primary_metric}`} points={folds.map((value, index) => [index + 1, value])} />}{recommended?.plots && Object.entries(recommended.plots).map(([name, points]) => <MiniPlot key={name} name={`${recommended.algorithm}_${name}`} points={points} />)}</div>;
+  const selected = completed.find((result) => result.algorithm === selectedAlgorithm) ?? completed[0];
+  const folds = selected?.metrics?.cross_validation?.[`${comparison.primary_metric}_values`];
+  return <div className="comparison-charts">
+    <label className="comparison-model-selector">{t("qsar.distributionModel")}<select value={selected?.algorithm ?? ""} onChange={(event) => setSelectedAlgorithm(event.target.value)}>{completed.map((result) => <option key={result.algorithm} value={result.algorithm}>{result.algorithm}{result.algorithm === comparison.recommended_algorithm ? ` (${t("qsar.recommendedShort")})` : ""}</option>)}</select></label>
+    <figure><figcaption>Cross-validation {comparison.primary_metric}</figcaption><div className="comparison-bars">{finite.map((item) => <div key={item.name}><span>{item.name}</span><i style={{ width: `${Math.max(2, Math.abs(item.value) / max * 100)}%` }} /><b>{item.value.toFixed(4)}</b></div>)}</div></figure>
+    {Array.isArray(folds) && selected && <MiniPlot name={`${selected.algorithm}_cv_${comparison.primary_metric}`} points={folds.map((value, index) => [index + 1, value])} />}
+    {selected?.plots && Object.entries(selected.plots).map(([name, points]) => <MiniPlot key={name} name={`${selected.algorithm}_${name}`} points={points} />)}
+  </div>;
 }

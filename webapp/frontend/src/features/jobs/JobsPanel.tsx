@@ -23,7 +23,10 @@ function isGeneration(job: Job): boolean {
 }
 
 function hasAnalyzableResults(job: Job): boolean {
-  return isGeneration(job) || job.job_type === "transfer_learning" || job.job_type === "reinforcement_learning";
+  return isGeneration(job)
+    || job.job_type === "transfer_learning"
+    || job.job_type === "reinforcement_learning"
+    || job.job_type === "qsar_comparison";
 }
 
 interface Props {

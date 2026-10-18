@@ -236,6 +236,7 @@ export function App() {
     || selectedJob.job_type === "generation"
     || selectedJob.job_type === "transfer_learning"
     || selectedJob.job_type === "reinforcement_learning"
+    || selectedJob.job_type === "qsar_comparison"
   ) ? selectedJob : null;
 
   return (

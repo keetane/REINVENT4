@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   ApiError,
+  getQsarComparison,
   getResultMolecules,
   getResultSchema,
   getResultStatistics,
@@ -10,6 +11,7 @@ import {
   type DescriptorSchema,
   type Job,
   type MoleculeListResponse,
+  type QsarComparisonResult,
   type ResultQuery,
   type ResultSchemaResponse,
   type StatisticsResponse
@@ -375,6 +377,142 @@ function LearningResultsPanel({ job, onBack }: Props) {
   );
 }
 
+type ComparisonSort = "metric" | "algorithm";
+
+function sortComparisonResults(comparison: QsarComparisonResult, sort: ComparisonSort) {
+  const results = [...comparison.results];
+  if (sort === "algorithm") return results.sort((a, b) => a.algorithm.localeCompare(b.algorithm));
+  const lowerIsBetter = ["rmse", "mae"].includes(comparison.primary_metric);
+  return results.sort((a, b) => {
+    const aValue = finiteNumber(a.metrics?.cross_validation?.[comparison.primary_metric]);
+    const bValue = finiteNumber(b.metrics?.cross_validation?.[comparison.primary_metric]);
+    if (aValue === null) return bValue === null ? 0 : 1;
+    if (bValue === null) return -1;
+    return lowerIsBetter ? aValue - bValue : bValue - aValue;
+  });
+}
+
+function ComparisonPlot({ name, points }: { name: string; points: number[][] }) {
+  const finitePoints = points.filter((point) => point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1]));
+  if (!finitePoints.length) return null;
+  const xs = finitePoints.map((point) => point[0]);
+  const ys = finitePoints.map((point) => point[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const mapX = (value: number) => 12 + ((value - minX) / (maxX - minX || 1)) * 176;
+  const mapY = (value: number) => 88 - ((value - minY) / (maxY - minY || 1)) * 76;
+  return (
+    <figure>
+      <figcaption>{name.replaceAll("_", " ")}</figcaption>
+      <svg viewBox="0 0 200 100" role="img" aria-label={name}>
+        <line x1="12" y1="88" x2="188" y2="88" />
+        <line x1="12" y1="12" x2="12" y2="88" />
+        {finitePoints.map((point, index) => <circle key={index} cx={mapX(point[0])} cy={mapY(point[1])} r="2.5" />)}
+      </svg>
+    </figure>
+  );
+}
+
+function ComparisonCharts({ comparison }: { comparison: QsarComparisonResult }) {
+  const { t } = useTranslation();
+  const completed = comparison.results.filter((result) => result.status === "completed");
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState(comparison.recommended_algorithm);
+  useEffect(() => setSelectedAlgorithm(comparison.recommended_algorithm), [comparison]);
+  const values = completed.flatMap((result) => {
+    const value = finiteNumber(result.metrics?.cross_validation?.[comparison.primary_metric]);
+    return value === null ? [] : [{ name: result.algorithm, value }];
+  });
+  const maximum = Math.max(...values.map((item) => Math.abs(item.value)), 1);
+  const selected = completed.find((result) => result.algorithm === selectedAlgorithm) ?? completed[0];
+  const folds = selected?.metrics?.cross_validation?.[`${comparison.primary_metric}_values`];
+  return (
+    <div className="comparison-charts">
+      <label className="comparison-model-selector">{t("qsar.distributionModel")}
+        <select value={selected?.algorithm ?? ""} onChange={(event) => setSelectedAlgorithm(event.target.value)}>
+          {completed.map((result) => <option key={result.algorithm} value={result.algorithm}>{result.algorithm}{result.algorithm === comparison.recommended_algorithm ? ` (${t("qsar.recommendedShort")})` : ""}</option>)}
+        </select>
+      </label>
+      <figure>
+        <figcaption>Cross-validation {comparison.primary_metric}</figcaption>
+        <div className="comparison-bars">
+          {values.map((item) => <div key={item.name}><span>{item.name}</span><i style={{ width: `${Math.max(2, Math.abs(item.value) / maximum * 100)}%` }} /><b>{item.value.toFixed(4)}</b></div>)}
+        </div>
+      </figure>
+      {Array.isArray(folds) && selected && <ComparisonPlot name={`${selected.algorithm}_cv_${comparison.primary_metric}`} points={folds.map((value, index) => [index + 1, value])} />}
+      {selected?.plots && Object.entries(selected.plots).map(([name, points]) => <ComparisonPlot key={name} name={`${selected.algorithm}_${name}`} points={points} />)}
+    </div>
+  );
+}
+
+function QsarComparisonResultsPanel({ job, onBack }: Props) {
+  const { t } = useTranslation();
+  const [comparison, setComparison] = useState<QsarComparisonResult | null>(null);
+  const [sort, setSort] = useState<ComparisonSort>("metric");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setComparison(null);
+    setError(null);
+    getQsarComparison(job.id)
+      .then((result) => { if (active) setComparison(result); })
+      .catch((loadError) => { if (active) setError(message(loadError, t("qsar.comparisonLoadError"))); });
+    return () => { active = false; };
+  }, [job.id, t]);
+
+  const rows = comparison ? sortComparisonResults(comparison, sort) : [];
+  return (
+    <div className="results-panel qsar-comparison-results">
+      <div className="section-heading result-heading">
+        <div>
+          <p className="section-kicker">QSAR MODEL COMPARISON</p>
+          <h2>{job.comment || t("qsar.results")}</h2>
+          <p>{t("qsar.comparisonAnalysisHint")}</p>
+        </div>
+        <button className="button quiet" type="button" onClick={onBack}>{t("results.back")}</button>
+      </div>
+
+      {!comparison && !error && <div className="empty-state">{t("qsar.comparisonLoading")}</div>}
+      {error && <p className="notice error" role="alert">{error}</p>}
+      {comparison && <>
+        <div className="result-summary-strip">
+          <div><strong>{comparison.recommended_algorithm || "—"}</strong><span>{t("qsar.recommendedModel")}</span></div>
+          <div><strong>{comparison.primary_metric}</strong><span>{t("qsar.primary")}</span></div>
+          <div><strong>{comparison.successful_count}</strong><span>{t("qsar.successfulModels")}</span></div>
+          <div><strong>{comparison.failed_count}</strong><span>{t("qsar.failedModels")}</span></div>
+        </div>
+        <p className="notice success">{t("qsar.recommended", { algorithm: comparison.recommended_algorithm, metric: comparison.primary_metric })}</p>
+        {comparison.selection_basis && <p className="muted">{t("qsar.selectionBasis")}: {comparison.selection_basis}</p>}
+        <section className="model-management comparison-analysis-section">
+          <div className="section-heading compact">
+            <div><h3>{t("qsar.results")}</h3></div>
+            <label className="comparison-sort">{t("qsar.sortOrder")}
+              <select value={sort} onChange={(event) => setSort(event.target.value as ComparisonSort)}>
+                <option value="metric">{t("qsar.primary")}</option>
+                <option value="algorithm">{t("qsar.modelName")}</option>
+              </select>
+            </label>
+          </div>
+          <div className="qsar-preview comparison-result-table-wrap">
+            <table>
+              <thead><tr><th>{t("qsar.model")}</th><th>{t("qsar.status")}</th><th>{t("qsar.cvMean")}</th><th>Test</th><th>{t("qsar.testR2")}</th><th>{t("qsar.gap")}</th><th>{t("qsar.inAd")}</th></tr></thead>
+              <tbody>{rows.map((result) => {
+                const cv = finiteNumber(result.metrics?.cross_validation?.[comparison.primary_metric]);
+                const std = finiteNumber(result.metrics?.cross_validation?.[`${comparison.primary_metric}_std`]);
+                const test = finiteNumber(result.metrics?.test?.[comparison.primary_metric]);
+                const testR2 = finiteNumber(result.metrics?.test?.r2);
+                const gap = finiteNumber(result.metrics?.performance_gap?.[comparison.primary_metric]);
+                const ad = finiteNumber(result.metrics?.applicability_domain_fraction);
+                return <tr key={result.algorithm}><td>{result.algorithm}{result.algorithm === comparison.recommended_algorithm ? " ★" : ""}</td><td>{result.status === "completed" ? t("qsar.success") : t("qsar.failure", { error: result.error ?? "" })}</td><td>{cv === null ? "—" : `${cv.toFixed(4)} ± ${std === null ? "—" : std.toFixed(4)}`}</td><td>{test === null ? "—" : test.toFixed(4)}</td><td>{testR2 === null ? "—" : testR2.toFixed(4)}</td><td>{gap === null ? "—" : gap.toFixed(4)}</td><td>{ad === null ? "—" : `${(ad * 100).toFixed(1)}%`}</td></tr>;
+              })}</tbody>
+            </table>
+          </div>
+          <ComparisonCharts comparison={comparison} />
+        </section>
+      </>}
+    </div>
+  );
+}
+
 function GenerationResultsPanel({ job, onBack }: Props) {
   const { t } = useTranslation();
   const [schema, setSchema] = useState<ResultSchemaResponse | null>(null);
@@ -617,6 +755,9 @@ function GenerationResultsPanel({ job, onBack }: Props) {
 }
 
 export function ResultsPanel(props: Props) {
+  if (props.job.job_type === "qsar_comparison") {
+    return <QsarComparisonResultsPanel {...props} />;
+  }
   if (props.job.job_type === "transfer_learning" || props.job.job_type === "reinforcement_learning") {
     return <LearningResultsPanel {...props} />;
   }

@@ -464,9 +464,15 @@ footer { display: flex; justify-content: space-between; padding: 18px 4px; color
 .qsar-score-config { margin-top: 0.9rem; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: #101f18; }
 .qsar-score-config h4 { margin: 0 0 0.8rem; color: var(--accent-soft); }
 .comparison-sort { display: grid; gap: 5px; color: var(--muted); font-size: 0.78rem; }
+.comparison-analysis-section { display: grid; gap: 18px; }
+.comparison-result-table-wrap { max-height: none; }
 .comparison-charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.comparison-model-selector { grid-column: 1 / -1; display: grid; grid-template-columns: max-content minmax(180px, 320px); align-items: center; gap: 12px; color: var(--muted); font-size: .78rem; }
 .comparison-charts figure { margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #0b1711; }
 .comparison-charts figcaption { margin-bottom: 10px; color: var(--muted); font-size: 0.82rem; }
+.comparison-charts svg { width: 100%; min-height: 180px; }
+.comparison-charts svg line { stroke: #496457; stroke-width: 1; }
+.comparison-charts svg circle { fill: var(--green); }
 .comparison-bars { display: grid; gap: 8px; }
 .comparison-bars div { display: grid; grid-template-columns: 110px minmax(40px, 1fr) 70px; align-items: center; gap: 8px; font-size: 0.75rem; }
 .comparison-bars i { display: block; height: 8px; border-radius: 8px; background: var(--accent); }
