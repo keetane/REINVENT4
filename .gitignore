@@ -31,6 +31,7 @@ smina.py
 /jobs.db-shm
 /jobs.db-wal
 /jobs/
+/models/
 /webapp/backend/.venv/
 /webapp/.run/
 /webapp/frontend/node_modules/
@@ -38,3 +39,4 @@ smina.py
 /webapp/frontend/coverage/
 /webapp/frontend/test-results/
 /webapp/frontend/*.tsbuildinfo
+/.runtimes/

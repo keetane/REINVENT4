@@ -47,6 +47,9 @@ class JobRecord:
     config_snapshot_path: str | None
     model_path: str | None
     command_metadata: dict[str, Any] | None
+    job_type: str
+    model_id: UUID | None
+    metrics: dict[str, Any]
 
 
 def _record(row: sqlite3.Row) -> JobRecord:
@@ -84,6 +87,9 @@ def _record(row: sqlite3.Row) -> JobRecord:
             if row["command_metadata_json"]
             else None
         ),
+        job_type=row["job_type"],
+        model_id=UUID(row["model_id"]) if row["model_id"] else None,
+        metrics=json.loads(row["metrics_json"]) if row["metrics_json"] else {},
     )
 
 
@@ -101,6 +107,8 @@ class JobRepository:
         parent_smiles_canonical: str | None = None,
         run_conditions: dict[str, Any],
         job_dir: str,
+        job_type: str = "generation",
+        model_id: UUID | None = None,
     ) -> JobRecord:
         now = utc_now()
         with connect(self.settings) as connection:
@@ -110,8 +118,8 @@ class JobRepository:
                     id, status, created_at, queued_at, updated_at,
                     comment_original, comment_slug, parent_smiles_input,
                     parent_smiles_canonical, run_conditions_json, job_dir,
-                    progress_message
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    progress_message, job_type, model_id, metrics_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     str(job_id),
@@ -126,6 +134,9 @@ class JobRepository:
                     json.dumps(run_conditions, ensure_ascii=False, sort_keys=True),
                     job_dir,
                     "queued",
+                    job_type,
+                    str(model_id) if model_id else None,
+                    "{}",
                 ),
             )
         return self.get(job_id)
@@ -274,6 +285,123 @@ class JobRepository:
                     JobStatus.CANCELLING.value,
                 ),
             )
+
+    def set_metrics(self, job_id: UUID, metrics: dict[str, Any]) -> None:
+        with connect(self.settings) as connection:
+            updated = connection.execute(
+                """
+                UPDATE jobs SET metrics_json = ?, updated_at = ?
+                WHERE id = ? AND status IN (?, ?)
+                """,
+                (
+                    json.dumps(metrics, ensure_ascii=False, sort_keys=True),
+                    utc_now(),
+                    str(job_id),
+                    JobStatus.RUNNING.value,
+                    JobStatus.CANCELLING.value,
+                ),
+            ).rowcount
+        if updated != 1:
+            raise RuntimeError("job is not active")
+
+    def set_training_progress(
+        self,
+        job_id: UUID,
+        *,
+        epoch: int,
+        total_epochs: int,
+        training_loss: float | None,
+        validation_loss: float | None,
+    ) -> JobRecord:
+        percent = min(100.0, max(0.0, epoch / total_epochs * 100.0))
+        with connect(self.settings) as connection:
+            current = connection.execute(
+                "SELECT metrics_json FROM jobs WHERE id = ?",
+                (str(job_id),),
+            ).fetchone()
+            previous = json.loads(current["metrics_json"] or "{}") if current else {}
+            history = list(previous.get("history", []))[-499:]
+            point = {
+                "epoch": epoch,
+                "training_loss": training_loss,
+                "validation_loss": validation_loss,
+            }
+            # Progress can arrive both from the callback endpoint and the log
+            # parser. Keep one point per epoch while retaining the latest value.
+            if history and history[-1].get("epoch") == epoch:
+                history[-1] = {**history[-1], **point}
+            else:
+                history.append(point)
+            metrics = {
+                "training_loss": training_loss,
+                "validation_loss": validation_loss,
+                "history": history,
+            }
+            updated = connection.execute(
+                """
+                UPDATE jobs
+                SET progress_current = ?, progress_total = ?, progress_percent = ?,
+                    progress_message = ?, metrics_json = ?, updated_at = ?
+                WHERE id = ? AND job_type IN ('transfer_learning', 'qsar_training')
+                    AND status IN (?, ?)
+                """,
+                (
+                    epoch,
+                    total_epochs,
+                    percent,
+                    f"Epoch {epoch} / {total_epochs}",
+                    json.dumps(metrics, ensure_ascii=False),
+                    utc_now(),
+                    str(job_id),
+                    JobStatus.RUNNING.value,
+                    JobStatus.CANCELLING.value,
+                ),
+            ).rowcount
+        if updated != 1:
+            raise RuntimeError("training job is not active")
+        return self.get(job_id)
+
+    def set_rl_progress(
+        self,
+        job_id: UUID,
+        *,
+        step: int,
+        maximum_steps: int,
+        metrics: dict[str, Any],
+    ) -> JobRecord:
+        percent = min(100.0, max(0.0, step / maximum_steps * 100.0))
+        with connect(self.settings) as connection:
+            current = connection.execute(
+                "SELECT metrics_json FROM jobs WHERE id = ?",
+                (str(job_id),),
+            ).fetchone()
+            previous = json.loads(current["metrics_json"] or "{}") if current else {}
+            history = list(previous.get("history", []))[-499:]
+            history.append({"step": step, **metrics})
+            value = {**metrics, "history": history}
+            updated = connection.execute(
+                """
+                UPDATE jobs
+                SET progress_current = ?, progress_total = ?, progress_percent = ?,
+                    progress_message = ?, metrics_json = ?, updated_at = ?
+                WHERE id = ? AND job_type = 'reinforcement_learning'
+                    AND status IN (?, ?)
+                """,
+                (
+                    step,
+                    maximum_steps,
+                    percent,
+                    f"Step {step} / {maximum_steps}",
+                    json.dumps(value, ensure_ascii=False, sort_keys=True),
+                    utc_now(),
+                    str(job_id),
+                    JobStatus.RUNNING.value,
+                    JobStatus.CANCELLING.value,
+                ),
+            ).rowcount
+        if updated != 1:
+            raise RuntimeError("RL job is not active")
+        return self.get(job_id)
 
     def finish(
         self,

@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, status
+from fastapi.responses import FileResponse
 
 from app.db.jobs import JobRecord, JobRepository
 from app.errors import AppError
@@ -45,6 +46,9 @@ def _response(job: JobRecord) -> JobResponse:
         ),
         exit_code=job.exit_code,
         error_summary=job.error_summary,
+        job_type=job.job_type,
+        model_id=job.model_id,
+        metrics=job.metrics,
     )
 
 
@@ -79,6 +83,21 @@ def get_jobs(
 @router.get("/{job_id}", response_model=JobResponse)
 def get_job(request: Request, job_id: UUID) -> JobResponse:
     return _response(_get(JobRepository(request.app.state.settings), job_id))
+
+
+@router.get("/{job_id}/standardization/{kind}")
+def get_standardization_artifact(request: Request, job_id: UUID, kind: str) -> FileResponse:
+    job = _get(JobRepository(request.app.state.settings), job_id)
+    key = {
+        "accepted": "standardization_accepted_path",
+        "rejected": "standardization_rejected_path",
+    }.get(kind)
+    if key is None or not job.run_conditions.get(key):
+        raise AppError(status_code=404, code="standardization_artifact_not_found", message="標準化CSVが見つかりません。")
+    path = confined_path(request.app.state.settings.repository_root, str(job.run_conditions[key]))
+    if not path.is_file() or path.is_symlink():
+        raise AppError(status_code=404, code="standardization_artifact_not_found", message="標準化CSVが見つかりません。")
+    return FileResponse(path, filename=path.name, media_type="text/csv")
 
 
 @router.post("/{job_id}/cancel", response_model=JobResponse)

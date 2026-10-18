@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { Ketcher } from "ketcher-core";
 import { Editor } from "ketcher-react";
 import { StandaloneStructServiceProvider } from "ketcher-standalone";
@@ -25,6 +26,7 @@ export default function KetcherEditor({
   onError,
   onReady
 }: Props) {
+  const { t } = useTranslation();
   const ketcherRef = useRef<Ketcher | null>(null);
   const changeHandlerRef = useRef<(() => void) | null>(null);
   const previousSyncVersion = useRef(syncVersion);
@@ -41,12 +43,12 @@ export default function KetcherEditor({
     void ketcher
       .setMolecule(toEditorStructure(value, linkInvent))
       .catch(() => {
-        onError("構造エディタへ反映できませんでした。SMILES を確認してください。");
+        onError(t("parent.editorSyncError"));
       })
       .finally(() => {
         syncingFromTextRef.current = false;
       });
-  }, [linkInvent, onError, syncVersion, value]);
+  }, [linkInvent, onError, syncVersion, t, value]);
 
   useEffect(
     () => () => {
@@ -64,7 +66,7 @@ export default function KetcherEditor({
       void ketcher
         .getSmiles()
         .then((smiles) => onChange(fromEditorStructure(smiles, linkInventRef.current)))
-        .catch(() => onError("描画した構造を SMILES に変換できませんでした。"));
+        .catch(() => onError(t("parent.editorConvertError")));
     };
     changeHandlerRef.current = handleChange;
     ketcher.changeEvent.add(handleChange);
@@ -76,7 +78,7 @@ export default function KetcherEditor({
       staticResourcesUrl="/"
       structServiceProvider={structureService}
       onInit={handleInit}
-      errorHandler={() => onError("構造エディタで処理エラーが発生しました。")}
+      errorHandler={() => onError(t("parent.editorError"))}
       disableMacromoleculesEditor
     />
   );

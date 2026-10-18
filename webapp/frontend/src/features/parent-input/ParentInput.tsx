@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ApiError, lookupPubChem, type ParentValidationResponse } from "../../api/client";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
@@ -13,6 +14,8 @@ interface Props {
   error: string | null;
   onSmilesChange: (smiles: string) => void;
   onValidate: () => void;
+  inputLabel?: string;
+  inputHint?: string;
 }
 
 export function ParentInput({
@@ -22,8 +25,11 @@ export function ParentInput({
   busy,
   error,
   onSmilesChange,
-  onValidate
+  onValidate,
+  inputLabel: inputLabelOverride,
+  inputHint: inputHintOverride
 }: Props) {
+  const { t } = useTranslation();
   const [showEditor, setShowEditor] = useState(false);
   const [editorStatus, setEditorStatus] = useState<"loading" | "ready" | "failed">("loading");
   const [editorMessage, setEditorMessage] = useState<string | null>(null);
@@ -35,21 +41,21 @@ export function ParentInput({
   const isLibInvent = modelKey === "libinvent";
   const isLinkInvent = modelKey === "linkinvent";
 
-  const inputLabel = isLinkInvent
+  const inputLabel = inputLabelOverride ?? (isLinkInvent
     ? "LinkInvent warheads"
     : isLibInvent
       ? "LibInvent scaffold"
-      : "Parent SMILES";
+      : "Parent SMILES");
   const placeholder = isLinkInvent
-    ? "例: Oc1cncc(*)c1|*c1ccoc1"
+    ? t("parent.linkPlaceholder")
     : isLibInvent
-      ? "例: c1ccc([*])cc1"
-      : "例: CCO または N[C@@H](C)C(=O)O";
-  const inputHint = isLinkInvent
-    ? "2つの固定側鎖にそれぞれ1個の * を付け、| で区切ってください。"
+      ? t("parent.libPlaceholder")
+      : t("parent.placeholder");
+  const inputHint = inputHintOverride ?? (isLinkInvent
+    ? t("parent.linkHint")
     : isLibInvent
-      ? "固定する骨格を入力し、側鎖を発生させる位置に * を付けてください。"
-      : "単一分子を入力してください。反応式と複数 fragment は対象外です。";
+      ? t("parent.libHint")
+      : t("parent.hint"));
 
   useEffect(() => {
     if (showEditor && validation) setSyncVersion((value) => value + 1);
@@ -65,12 +71,10 @@ export function ParentInput({
     if (!showEditor || editorStatus !== "loading") return;
     const timeout = window.setTimeout(() => {
       setEditorStatus("failed");
-      setEditorMessage(
-        "構造エディタの初期化が完了しませんでした。SMILES 入力はそのまま使用できます。"
-      );
+      setEditorMessage(t("parent.editorTimeout"));
     }, 15_000);
     return () => window.clearTimeout(timeout);
-  }, [editorStatus, showEditor]);
+  }, [editorStatus, showEditor, t]);
 
   const handlePubChemLookup = async () => {
     setPubchemBusy(true);
@@ -85,7 +89,7 @@ export function ParentInput({
       setPubchemError(
         lookupError instanceof ApiError
           ? lookupError.message
-          : "PubChem に接続できませんでした。時間をおいて再試行してください。"
+          : t("parent.pubchemError")
       );
     } finally {
       setPubchemBusy(false);
@@ -111,7 +115,7 @@ export function ParentInput({
                 void handlePubChemLookup();
               }
             }}
-            placeholder="例: Aspirin, Imatinib"
+            placeholder={t("parent.namePlaceholder")}
             autoComplete="off"
           />
           <button
@@ -120,12 +124,12 @@ export function ParentInput({
             onClick={() => void handlePubChemLookup()}
             disabled={pubchemBusy || !molecularName.trim()}
           >
-            {pubchemBusy ? "検索中…" : "PubChemから取得"}
+            {pubchemBusy ? t("parent.searching") : t("parent.lookup")}
           </button>
         </div>
-        <p className="field-hint">分子名からisomeric SMILESを検索し、下の入力欄へ反映します。</p>
+        <p className="field-hint">{t("parent.pubchemHint")}</p>
         {pubchemError && <p className="notice error compact" role="alert">{pubchemError}</p>}
-        {pubchemResult && <p className="pubchem-result" role="status">✓ {pubchemResult} を反映しました。</p>}
+        {pubchemResult && <p className="pubchem-result" role="status">✓ {t("parent.applied", { value: pubchemResult })}</p>}
       </div>
 
       <div className="field-group">
@@ -146,14 +150,14 @@ export function ParentInput({
 
       <div className="inline-actions">
         <button className="button primary" type="button" onClick={onValidate} disabled={busy}>
-          {busy ? "検証中…" : "検証する"}
+          {busy ? t("parent.validating") : t("parent.validate")}
         </button>
         <button
           className="button secondary"
           type="button"
           onClick={() => setShowEditor((value) => !value)}
         >
-          {showEditor ? "構造エディタを閉じる" : "構造エディタを開く"}
+          {showEditor ? t("parent.closeEditor") : t("parent.openEditor")}
         </button>
         {showEditor && (
           <button
@@ -162,7 +166,7 @@ export function ParentInput({
             onClick={() => setSyncVersion((value) => value + 1)}
             disabled={!smiles.trim() || editorStatus !== "ready"}
           >
-            SMILES を描画へ反映
+            {t("parent.sync")}
           </button>
         )}
       </div>
@@ -172,7 +176,7 @@ export function ParentInput({
         <div className="validation-card" role="status">
           <span className="validation-mark">✓</span>
           <div>
-            <strong>有効な入力</strong>
+            <strong>{t("parent.valid")}</strong>
             <p>{validation.canonical_smiles}</p>
             <small>{validation.molecular_formula} · {validation.atom_count} atoms</small>
           </div>
@@ -180,7 +184,7 @@ export function ParentInput({
       )}
 
       {showEditor && (
-        <div className="editor-shell" aria-label="Ketcher 構造エディタ">
+        <div className="editor-shell" aria-label={t("parent.editorLabel")}>
           <div className="editor-caption">
             <span>Ketcher standalone</span>
             <span className={`editor-state ${editorStatus}`}>{editorStatus}</span>
@@ -189,12 +193,12 @@ export function ParentInput({
           <ErrorBoundary
             fallback={
               <div className="editor-fallback" role="alert">
-                構造エディタを読み込めませんでした。上の SMILES 入力はそのまま使用できます。
+                {t("parent.editorUnavailable")}
               </div>
             }
             onError={() => setEditorStatus("failed")}
           >
-            <Suspense fallback={<div className="editor-fallback">構造エディタを準備中…</div>}>
+            <Suspense fallback={<div className="editor-fallback">{t("parent.editorLoading")}</div>}>
               <KetcherEditor
                 value={smiles}
                 linkInvent={isLinkInvent}

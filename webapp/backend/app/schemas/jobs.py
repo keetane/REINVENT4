@@ -4,15 +4,23 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.job import JobStatus
 
 
 class JobCreateRequest(BaseModel):
-    parent_smiles: str = Field(min_length=1, max_length=10_000)
+    parent_smiles: str = Field(default="", max_length=10_000)
     comment: str = Field(default="", max_length=1_000)
     run_conditions: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def require_parent_unless_model_can_resolve_it(self):
+        model_id = str(self.run_conditions.get("model_id", ""))
+        if not self.parent_smiles.strip() and model_id not in {"standard:reinvent"}:
+            if not model_id or model_id.startswith("standard:"):
+                raise ValueError("parent_smiles is required for this model")
+        return self
 
 
 class JobProgress(BaseModel):
@@ -36,6 +44,9 @@ class JobResponse(BaseModel):
     progress: JobProgress = Field(default_factory=JobProgress)
     exit_code: int | None = None
     error_summary: str | None = None
+    job_type: str = "generation"
+    model_id: UUID | None = None
+    metrics: dict[str, Any] = Field(default_factory=dict)
 
 
 class JobListResponse(BaseModel):

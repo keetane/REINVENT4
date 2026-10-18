@@ -18,6 +18,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings.jobs_dir.mkdir(parents=True, exist_ok=True)
+        app.state.settings.model_store_dir.mkdir(parents=True, exist_ok=True)
+        app.state.settings.qsar_model_store_dir.mkdir(parents=True, exist_ok=True)
         apply_migrations(app.state.settings)
         yield
 
@@ -31,7 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(resolved_settings.cors_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type", "Accept"],
     )
     application.include_router(api_router)

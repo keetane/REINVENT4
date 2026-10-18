@@ -32,6 +32,110 @@ export interface Job {
   };
   exit_code: number | null;
   error_summary: string | null;
+  job_type: "generation" | "transfer_learning" | "qsar_training" | "qsar_comparison" | "reinforcement_learning";
+  model_id: string | null;
+  metrics: {
+    training_loss?: number | null;
+    validation_loss?: number | null;
+    training?: Record<string, number | null>;
+    test?: Record<string, number | null>;
+    cross_validation?: Record<string, number | boolean | string | null>;
+    mean_total_score?: number | null;
+    fraction_valid_smiles?: number | null;
+    components?: Record<string, number | null>;
+    history?: Record<string, unknown>[];
+  };
+}
+
+export interface QsarCapability {
+  key: string;
+  label: string;
+  available: boolean;
+  reason: string | null;
+  version: string | null;
+  task_types: ("regression" | "classification")[];
+}
+
+export interface QsarCapabilities {
+  algorithms: QsarCapability[];
+  devices: QsarCapability[];
+}
+
+export interface QsarDataInspection {
+  columns: string[];
+  total_rows: number;
+  valid_count: number;
+  invalid_smiles_count: number;
+  missing_target_count: number;
+  invalid_target_count: number;
+  duplicate_count: number;
+  conflicting_duplicate_count: number;
+  standardized_count: number;
+  fragment_extracted_count: number;
+  neutralized_count: number;
+  charged_structure_retained_count: number;
+  low_molecular_weight_excluded_count: number;
+  final_accepted_count: number;
+  standardization_version: string;
+  preview: Record<string, string>[];
+  rejected_rows: { row_number: number; smiles: string; target: string; reason: string; standardized_smiles: string | null }[];
+}
+
+export interface QsarModel {
+  id: string;
+  name: string;
+  algorithm: string;
+  task_type: "regression" | "classification";
+  target_name: string;
+  target_unit: string;
+  created_at: string;
+  training_data_count: number;
+  test_data_count: number;
+  metrics: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  ad_threshold: number;
+  in_use: boolean;
+}
+
+export interface QsarDataPayload {
+  file_name: string;
+  content: string;
+  smiles_column: string | null;
+  target_column: string | null;
+  task_type: "regression" | "classification";
+  target_transform: "none" | "p_activity";
+  concentration_unit: "M" | "mM" | "uM" | "μM" | "nM" | "pM";
+  activity_type: "IC50" | "EC50" | "Ki" | "Kd" | "custom";
+  duplicate_strategy: "exclude_conflicts" | "keep_first" | "mean";
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  model_type: string;
+  source: "standard" | "transfer_learning" | "reinforcement_learning";
+  description: string;
+  created_at: string | null;
+  training_data_count: number | null;
+  validation_data_count: number | null;
+  training_conditions: Record<string, unknown>;
+  base_model_key: string | null;
+  deletable: boolean;
+}
+
+export interface TrainingDataInspection {
+  columns: string[];
+  total_rows: number;
+  valid_count: number;
+  invalid_count: number;
+  duplicate_count: number;
+  standardized_count: number;
+  fragment_extracted_count: number;
+  neutralized_count: number;
+  charged_structure_retained_count: number;
+  low_molecular_weight_excluded_count: number;
+  model_compatibility_error_count: number;
+  standardization_version: string;
 }
 
 export interface JobListResponse {
@@ -156,7 +260,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       // Keep the fallback uniform instead of exposing raw server text.
     }
     throw new ApiError(
-      body.error?.message ?? "サーバーで処理できませんでした。",
+      body.error?.message ?? "The server could not process the request.",
       response.status,
       body.error?.code ?? "request_failed"
     );
@@ -194,12 +298,199 @@ export function createJob(payload: {
   });
 }
 
+export function listModels(signal?: AbortSignal): Promise<{ items: ModelInfo[] }> {
+  return request<{ items: ModelInfo[] }>("/api/models", { signal });
+}
+
+export function deleteModel(modelId: string): Promise<{ id: string; deleted: boolean }> {
+  return request<{ id: string; deleted: boolean }>(`/api/models/${encodeURIComponent(modelId)}`, {
+    method: "DELETE"
+  });
+}
+
+export function inspectTrainingData(payload: {
+  file_name: string;
+  content: string;
+  smiles_column?: string | null;
+  base_model?: "reinvent" | "mol2mol";
+}): Promise<TrainingDataInspection> {
+  return request<TrainingDataInspection>("/api/training-data/inspect", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createTrainingJob(payload: {
+  file_name: string;
+  content: string;
+  smiles_column?: string | null;
+  base_model: "reinvent" | "mol2mol";
+  comment: string;
+  train_fraction: number;
+  num_epochs: number;
+  batch_size: number;
+  learning_rate: number;
+  tanimoto_lower: number;
+  tanimoto_upper: number;
+  device: "cpu" | "cuda" | "mps";
+}): Promise<Job> {
+  return request<Job>("/api/training-jobs", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getQsarCapabilities(): Promise<QsarCapabilities> {
+  return request<QsarCapabilities>("/api/qsar/capabilities");
+}
+
+export function inspectQsarData(payload: QsarDataPayload): Promise<QsarDataInspection> {
+  return request<QsarDataInspection>("/api/qsar-data/inspect", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createQsarJob(payload: QsarDataPayload & Record<string, unknown>): Promise<Job> {
+  return request<Job>("/api/qsar-jobs", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export interface QsarComparisonResult {
+  primary_metric: string;
+  recommended_algorithm: string;
+  selection_basis: string;
+  successful_count: number;
+  failed_count: number;
+  results: {
+    algorithm: string;
+    status: "completed" | "failed";
+    duration_seconds: number;
+    metrics?: { training?: Record<string, number | null>; test?: Record<string, number | null>; cross_validation?: Record<string, number | boolean | string | null | number[]>; performance_gap?: Record<string, number>; applicability_domain_fraction?: number; inference_molecules_per_second?: number };
+    plots?: Record<string, number[][]>;
+    error?: string;
+  }[];
+}
+
+export function createQsarComparisonJob(payload: QsarDataPayload & Record<string, unknown>): Promise<Job> {
+  return request<Job>("/api/qsar-comparison-jobs", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function getQsarComparison(jobId: string): Promise<QsarComparisonResult> {
+  return request<QsarComparisonResult>(`/api/qsar-comparisons/${encodeURIComponent(jobId)}`);
+}
+
+export function registerQsarComparisonModel(jobId: string, algorithm: string, comment: string): Promise<QsarModel> {
+  return request<QsarModel>(`/api/qsar-comparisons/${encodeURIComponent(jobId)}/register`, {
+    method: "POST",
+    body: JSON.stringify({ algorithm, comment })
+  });
+}
+
+export function listQsarModels(): Promise<{ items: QsarModel[] }> {
+  return request<{ items: QsarModel[] }>("/api/qsar-models");
+}
+
+export function deleteQsarModel(modelId: string): Promise<{ id: string; deleted: boolean }> {
+  return request<{ id: string; deleted: boolean }>(`/api/qsar-models/${encodeURIComponent(modelId)}`, {
+    method: "DELETE"
+  });
+}
+
+export function qsarArtifactUrl(modelId: string, kind: "model" | "dataset" | "predictions" | "evaluation"): string {
+  return `/api/qsar-models/${encodeURIComponent(modelId)}/artifacts/${kind}`;
+}
+
+export function getQsarEvaluation(modelId: string): Promise<{ metrics: Record<string, unknown>; metadata: Record<string, unknown>; plots?: Record<string, number[][]> }> {
+  return request<{ metrics: Record<string, unknown>; metadata: Record<string, unknown>; plots?: Record<string, number[][]> }>(qsarArtifactUrl(modelId, "evaluation"));
+}
+
+export interface RlQsarComponent {
+  model_id: string;
+  weight: number;
+  transform: "sigmoid" | "reverse_sigmoid" | "double_sigmoid" | "none";
+  low: number;
+  high: number;
+  k: number;
+  class_index: number;
+  ad_behavior: "penalize" | "allow";
+}
+
+export interface RlPropertyComponent {
+  component: string;
+  weight: number;
+  transform: "sigmoid" | "reverse_sigmoid" | "double_sigmoid" | "none";
+  low: number;
+  high: number;
+  k: number;
+  reference_smiles: string[];
+  smarts: string[];
+}
+
+export interface RlPreviewRow {
+  smiles: string;
+  generated_smiles: string;
+  standardized_smiles: string | null;
+  molecular_weight: number | null;
+  formal_charge: number | null;
+  exclusion_reason: string | null;
+  valid: boolean;
+  components: { kind: "qsar" | "property"; name: string; prediction: number | null; in_ad: boolean | null; score: number; weight: number }[];
+  total_score: number;
+}
+
+export function createRlJob(payload: Record<string, unknown>): Promise<Job> {
+  return request<Job>("/api/rl-jobs", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function getRlCapabilities(): Promise<{ devices: { key: "cpu" | "cuda" | "mps"; label: string; available: boolean }[] }> {
+  return request<{ devices: { key: "cpu" | "cuda" | "mps"; label: string; available: boolean }[] }>("/api/rl/capabilities");
+}
+
+export interface QsarPredictionRow {
+  smiles: string;
+  standardized_smiles: string | null;
+  molecular_weight: number | null;
+  formal_charge: number | null;
+  valid: boolean;
+  prediction: number | null;
+  scoring_prediction: number;
+  nearest_tanimoto: number | null;
+  in_ad: boolean;
+  error: string | null;
+}
+
+export function predictQsar(modelId: string, smiles: string[]): Promise<{ model_id: string; predictions: QsarPredictionRow[] }> {
+  return request<{ model_id: string; predictions: QsarPredictionRow[] }>("/api/qsar/predict", {
+    method: "POST",
+    body: JSON.stringify({ model_id: modelId, smiles })
+  });
+}
+
+export function previewRlScoring(payload: {
+  smiles: string[];
+  qsar_components: RlQsarComponent[];
+  property_components: RlPropertyComponent[];
+  aggregation: "geometric_mean" | "arithmetic_mean";
+}): Promise<{ rows: RlPreviewRow[] }> {
+  return request<{ rows: RlPreviewRow[] }>("/api/rl/preview", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function listJobs(signal?: AbortSignal): Promise<JobListResponse> {
   return request<JobListResponse>("/api/jobs?limit=100&offset=0", { signal });
 }
 
 export function getJob(jobId: string, signal?: AbortSignal): Promise<Job> {
   return request<Job>(`/api/jobs/${encodeURIComponent(jobId)}`, { signal });
+}
+
+export function jobStandardizationArtifactUrl(jobId: string, kind: "accepted" | "rejected"): string {
+  return `/api/jobs/${encodeURIComponent(jobId)}/standardization/${kind}`;
 }
 
 export function getJobLogs(jobId: string, signal?: AbortSignal): Promise<JobLogResponse> {

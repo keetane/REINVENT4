@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from app.db.jobs import JobRepository
+from app.errors import AppError
 from app.reinvent_adapter import AdapterConfigurationError, build_reinvent_command
 from app.schemas.jobs import JobCreateRequest
 from app.services.jobs import create_job
@@ -57,17 +58,14 @@ def test_adapter_generates_allowlisted_argv_and_toml(initialized_settings, tmp_p
 
 def test_adapter_rejects_client_selected_model_path(initialized_settings, tmp_path):
     settings = _adapter_settings(initialized_settings, tmp_path)
-    created = create_job(
-        settings,
-        JobCreateRequest(
-            parent_smiles="CCO",
-            run_conditions={"model_key": "../../private/model"},
-        ),
-    )
-    job_dir = confined_path(settings.repository_root, created.job_dir)
-
-    with pytest.raises(AdapterConfigurationError, match="allowlist"):
-        build_reinvent_command(settings, created, job_dir)
+    with pytest.raises(AppError, match="利用できません"):
+        create_job(
+            settings,
+            JobCreateRequest(
+                parent_smiles="CCO",
+                run_conditions={"model_key": "../../private/model"},
+            ),
+        )
 
 
 def test_worker_records_adapter_configuration_failure(initialized_settings, tmp_path):

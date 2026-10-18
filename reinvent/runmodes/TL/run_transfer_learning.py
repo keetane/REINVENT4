@@ -104,7 +104,11 @@ def run_transfer_learning(
             lr=lr_config.lr,
             betas=(lr_config.beta1, lr_config.beta2),
             eps=lr_config.eps,
-            capturable=str(device) != "cpu",  # workaround for pytorch 1.11
+            # PyTorch's Adam implementation only supports capturable optimizers
+            # on a subset of accelerator backends.  In particular, enabling it
+            # for MPS raises an assertion before the first optimizer step.
+            capturable=device.type
+            in {"cuda", "xpu", "hpu", "privateuseone", "xla"},
         )
 
         lr_step = (

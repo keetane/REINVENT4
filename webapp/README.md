@@ -47,6 +47,50 @@ The API endpoints are:
 - `GET /api/jobs/{job_id}/results/statistics`
 - `GET /api/jobs/{job_id}/results/download.csv`
 - `GET /api/jobs/{job_id}/results/download.sdf`
+- `POST /api/qsar-data/inspect`
+- `POST /api/qsar-jobs`
+- `POST /api/qsar-comparison-jobs`
+- `GET /api/qsar-comparisons/{job_id}`
+- `POST /api/qsar-comparisons/{job_id}/register`
+- `GET/DELETE /api/qsar-models[/{model_id}]`
+- `GET /api/qsar-models/{model_id}/artifacts/{model|dataset|predictions|evaluation}`
+- `POST /api/qsar/predict`
+- `POST /api/rl-jobs`
+- `POST /api/rl-jobs/{job_id}/progress`
+
+## QSAR and Reinforcement Learning
+
+The QSAR tab accepts CSV data, validates and canonicalizes SMILES with RDKit, records rejected
+rows, resolves duplicate conflicts according to the selected policy, and optionally converts M,
+mM, μM/uM, nM, or pM concentrations to pActivity. Random Forest, SVM, Gradient Boosting, Extra
+Trees, Kernel Ridge, Gaussian Process, Ridge, Elastic Net, Logistic Regression, MLP, LightGBM,
+XGBoost, and CatBoost are available for their supported regression/classification tasks.
+Fingerprints, RDKit descriptors, train-only preprocessing, random/scaffold split,
+cross-validation, test metrics, timing, and Morgan-neighbour applicability-domain results are
+stored with the trusted model artifacts.
+
+Model Comparison applies the same deterministic split to every selected algorithm. The recommended
+model is selected only from training cross-validation results; the held-out Test set is reported
+afterward and is not used for model selection. Successful candidates can be registered separately.
+
+Chemprop v2.3.1 and QSARtuna 4.0.1 run in separate virtual environments under `.runtimes/` so their
+PyTorch, RDKit, and optimization dependencies do not replace the REINVENT runtime. Chemprop uses
+its official v2 command-line training and prediction interfaces. QSARtuna uses its official Python
+optimization/build API. Their saved models are connected to REINVENT staged learning through the
+official `ExternalProcess` scoring component.
+
+The RL tab creates an independent `staged_learning` job. It can start from a standard Prior, a TL
+model, or an earlier RL checkpoint. The server snapshots all selected generation/QSAR model IDs and
+paths when the job is queued. A repository scoring plugin named `QsarJoblib` loads only trusted
+server-created model bundles, performs batched predictions, and applies the stored Morgan nearest-
+neighbour AD threshold. Invalid or non-finite predictions are never converted into a high score.
+REINVENT's official aggregation, transforms, DAP learning strategy, responder, diversity filter,
+summary CSV, and checkpoint handling remain in use.
+
+With `REINVENT_WEB_WORKER_RUNNER=reinvent`, QSAR training and prediction use the configured REINVENT
+runtime because it already contains RDKit 2024.09.6 and scikit-learn 1.6.1. The API virtualenv does
+not deserialize QSAR models. Model downloads are trusted artifacts and must never be uploaded back
+and loaded from an untrusted source.
 
 ## REINVENT adapter
 
@@ -89,6 +133,11 @@ REINVENT_SMOKE_PYTHON=/Users/keetane/miniforge3/envs/r4/bin/python \
 .venv/bin/pytest -m reinvent -vv
 ```
 
+An RL smoke should use one step and a small batch, then verify all three artifacts: the checkpoint,
+`rl-summary_1.csv`, and a sampling CSV created from the checkpoint. The test is intentionally not in
+the routine suite because the Prior is roughly 22 MB and the run imports PyTorch and all scoring
+plugins.
+
 No stable per-step progress signal was observed in the sampling logs, so running jobs expose phase
 messages only. A percentage is stored only after validated completion.
 
@@ -105,6 +154,26 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`. The Vite development proxy forwards `/api` to the loopback API.
+The language selector stores Japanese/English preference in local storage. Navigation and Tutorial
+content are translated from `src/i18n/`; feature-form translation is being migrated incrementally.
+
+## Clean setup
+
+The supported setup scripts install REINVENT, the web backend, Chemprop v2, QSARtuna, and frontend
+dependencies. They deliberately do not install OpenEye or ROCS.
+
+```bash
+# Apple Silicon macOS
+bash scripts/setup_macos.sh
+
+# Ubuntu (CPU by default; set REINVENT_PROCESSOR_TYPE before running for CUDA)
+bash scripts/setup_ubuntu.sh
+
+python scripts/check_environment.py
+```
+
+Every required runtime must report `[OK]`. The checker exits non-zero when a runtime or command is
+missing. See the in-app Tutorial for the same instructions in Japanese and English.
 
 ## Result semantics
 
@@ -137,4 +206,5 @@ LAN or the internet.
 
 See [operations.md](docs/operations.md) for startup, shutdown, recovery, backup, staged migration,
 and rollback. See [security-review.md](docs/security-review.md) and
-[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) before changing the deployment boundary.
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) before changing the deployment boundary. See
+[qsar-rl.md](docs/qsar-rl.md) for model semantics, supported versions, and operating limits.

@@ -6,11 +6,18 @@ const descriptorNames = [
   "HeavyAtomCount", "FormalCharge", "LipinskiViolations", "MolMR",
   "ParentSimilarity", "ScaffoldSimilarity"
 ];
+const modelItems = [
+  ["mol2mol_high", "Mol2Mol high similarity", "mol2mol"],
+  ["reinvent", "REINVENT Prior", "reinvent"],
+  ["libinvent", "LibInvent", "libinvent"],
+  ["linkinvent", "LinkInvent", "linkinvent"]
+].map(([key, name, model_type]) => ({ id: `standard:${key}`, name, model_type, source: "standard", description: `${name} description`, created_at: null, training_data_count: null, validation_data_count: null, training_conditions: {}, base_model_key: key, deletable: false }));
 
 test("opens the tutorial and applies a LinkInvent sample", async ({ page }) => {
   await page.route("http://127.0.0.1:5173/api/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/health") return route.fulfill({ json: { status: "ok", database: "ok", version: "0.1.0" } });
+    if (url.pathname === "/api/models") return route.fulfill({ json: { items: modelItems } });
     if (url.pathname === "/api/jobs") return route.fulfill({ json: { items: [], total: 0, limit: 100, offset: 0 } });
     return route.abort();
   });
@@ -20,8 +27,10 @@ test("opens the tutorial and applies a LinkInvent sample", async ({ page }) => {
   await page.getByRole("button", { name: /00 Tutorial/ }).click();
   await expect(page.getByRole("heading", { name: "分子生成をはじめる" })).toBeVisible();
   await expect(page.getByText("REINVENT4", { exact: true }).last()).toBeVisible();
-  await page.getByRole("button", { name: "この例を使う" }).nth(1).click();
-  await expect(page.getByLabel("Model")).toHaveValue("linkinvent");
+  await expect(page.getByLabel("Model")).toHaveValue("reinvent");
+  await page.getByLabel("Model").selectOption("linkinvent");
+  await page.getByRole("button", { name: "このモデルを使う" }).click();
+  await expect(page.getByLabel("Model")).toHaveValue("standard:linkinvent");
   await expect(page.getByLabel("LinkInvent warheads")).toHaveValue("Oc1cncc(*)c1|*c1ccoc1");
 });
 
@@ -47,6 +56,8 @@ test("creates a job and restores it in progress history", async ({ page }) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/health") {
       await route.fulfill({ json: { status: "ok", database: "ok", version: "0.1.0" } });
+    } else if (url.pathname === "/api/models") {
+      await route.fulfill({ json: { items: modelItems } });
     } else if (url.pathname === "/api/parents/validate") {
       await route.fulfill({
         json: {
@@ -78,6 +89,8 @@ test("creates a job and restores it in progress history", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveTitle("Molecular Generator");
   await expect(page.getByRole("heading", { name: "Molecular Generator" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveValue("standard:reinvent");
+  await page.getByLabel("Model").selectOption("standard:mol2mol_high");
   await expect(page.getByLabel("Parent SMILES")).toHaveAttribute("rows", "2");
   await page.getByLabel("Molecular Name").fill("Aspirin");
   await page.getByRole("button", { name: "PubChemから取得" }).click();
@@ -99,6 +112,8 @@ test("loads the local Ketcher editor without an external structure service", asy
     const url = new URL(route.request().url());
     if (url.pathname === "/api/health") {
       await route.fulfill({ json: { status: "ok", database: "ok", version: "0.1.0" } });
+    } else if (url.pathname === "/api/models") {
+      await route.fulfill({ json: { items: modelItems } });
     } else if (url.pathname === "/api/jobs") {
       await route.fulfill({ json: { items: [], total: 0, limit: 100, offset: 0 } });
     } else {
@@ -107,11 +122,57 @@ test("loads the local Ketcher editor without an external structure service", asy
   });
 
   await page.goto("/");
+  await page.getByLabel("Model").selectOption("standard:mol2mol_high");
   await page.getByRole("button", { name: "構造エディタを開く" }).click();
   await expect(page.getByText("ready", { exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByLabel("Ketcher 構造エディタ")).toBeVisible();
   await page.waitForTimeout(2_000);
   await expect(page.getByText("構造エディタを読み込めませんでした。", { exact: false })).toHaveCount(0);
+});
+
+test("validates training data and queues a Transfer Learning job", async ({ page }) => {
+  const trainingJob = {
+    id: "22345678-1234-5678-1234-567812345678",
+    status: "queued",
+    created_at: "2026-10-17T12:00:00Z",
+    queued_at: "2026-10-17T12:00:00Z",
+    started_at: null,
+    finished_at: null,
+    updated_at: "2026-10-17T12:00:00Z",
+    comment: "kinase_A",
+    parent_smiles: "",
+    parent_smiles_canonical: null,
+    progress: { current: null, total: null, percent: null, message: "queued" },
+    exit_code: null,
+    error_summary: null,
+    job_type: "transfer_learning",
+    model_id: "32345678-1234-5678-1234-567812345678",
+    metrics: {}
+  };
+  await page.route("http://127.0.0.1:5173/api/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/health") return route.fulfill({ json: { status: "ok", database: "ok", version: "0.1.0" } });
+    if (url.pathname === "/api/models") return route.fulfill({ json: { items: modelItems } });
+    if (url.pathname === "/api/jobs") return route.fulfill({ json: { items: [], total: 0, limit: 100, offset: 0 } });
+    if (url.pathname === "/api/training-data/inspect") return route.fulfill({ json: { columns: [], total_rows: 4, valid_count: 3, invalid_count: 1, duplicate_count: 0 } });
+    if (url.pathname === "/api/training-jobs") return route.fulfill({ status: 202, json: trainingJob });
+    if (url.pathname === `/api/jobs/${trainingJob.id}`) return route.fulfill({ json: trainingJob });
+    if (url.pathname === `/api/jobs/${trainingJob.id}/logs`) return route.fulfill({ json: { job_id: trainingJob.id, lines: [], truncated: false } });
+    return route.abort();
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /02 Transfer Learning/ }).click();
+  await page.getByLabel("学習データ").setInputFiles({
+    name: "training.smi",
+    mimeType: "text/plain",
+    buffer: Buffer.from("CCO\nCCN\nCCC\nnot-smiles\n")
+  });
+  await expect(page.getByText("有効化合物")).toBeVisible();
+  await expect(page.getByText("3", { exact: true })).toBeVisible();
+  await page.getByLabel("モデル名コメント").fill("kinase_A");
+  await page.getByRole("button", { name: "学習を開始" }).click();
+  await expect(page.getByRole("heading", { name: "ジョブ履歴" })).toBeVisible();
 });
 
 test("opens a completed job result and applies a descriptor filter", async ({ page }) => {
@@ -124,6 +185,7 @@ test("opens a completed job result and applies a descriptor filter", async ({ pa
   await page.route("http://127.0.0.1:5173/api/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/health") return route.fulfill({ json: { status: "ok", database: "ok", version: "0.1.0" } });
+    if (url.pathname === "/api/models") return route.fulfill({ json: { items: modelItems } });
     if (url.pathname === "/api/jobs") return route.fulfill({ json: { items: [job], total: 1, limit: 100, offset: 0 } });
     if (url.pathname === `/api/jobs/${id}`) return route.fulfill({ json: job });
     if (url.pathname === `/api/jobs/${id}/logs`) return route.fulfill({ json: { job_id: id, lines: [], truncated: false } });

@@ -15,12 +15,14 @@
   },
   "dependencies": {
     "events": "3.3.0",
+    "i18next": "^26.4.7",
     "ketcher-core": "3.18.0",
     "ketcher-react": "3.18.0",
     "ketcher-standalone": "3.18.0",
     "process": "0.11.10",
     "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react-dom": "18.2.0",
+    "react-i18next": "^17.0.21"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",

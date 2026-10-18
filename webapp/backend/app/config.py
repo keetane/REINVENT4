@@ -13,11 +13,22 @@ def _resolve_path(value: str | None, default: Path) -> Path:
     return Path(value).expanduser().resolve() if value else default.resolve()
 
 
+def _executable_path(value: str | None, default: Path) -> Path:
+    """Return an absolute executable path without dereferencing virtualenv links.
+
+    A virtual environment's ``bin/python`` is commonly a symlink.  Calling
+    ``resolve()`` here changes the executable's location and therefore its
+    ``sys.prefix``, which silently escapes the selected environment.
+    """
+    return Path(os.path.abspath(Path(value).expanduser() if value else default))
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     repository_root: Path
     database_path: Path
     jobs_dir: Path
+    models_dir: Path | None = None
     app_timezone: str = "Asia/Tokyo"
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:5173", "http://localhost:5173")
     sqlite_busy_timeout_ms: int = 5_000
@@ -28,6 +39,17 @@ class Settings:
     worker_runner: str = "fake"
     reinvent_runtime_python: Path = Path(sys.executable)
     reinvent_source_root: Path = REPOSITORY_ROOT
+    internal_api_base_url: str = "http://127.0.0.1:8000"
+    chemprop_runtime_python: Path | None = None
+    qsartuna_runtime_python: Path | None = None
+
+    @property
+    def model_store_dir(self) -> Path:
+        return (self.models_dir or (self.repository_root / "models")).resolve()
+
+    @property
+    def qsar_model_store_dir(self) -> Path:
+        return (self.model_store_dir / "qsar").resolve()
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,6 +72,9 @@ class Settings:
             jobs_dir=_resolve_path(
                 os.getenv("REINVENT_WEB_JOBS_DIR"), repository_root / "jobs"
             ),
+            models_dir=_resolve_path(
+                os.getenv("REINVENT_WEB_MODELS_DIR"), repository_root / "models"
+            ),
             app_timezone=os.getenv("REINVENT_WEB_TIMEZONE", "Asia/Tokyo"),
             cors_origins=origins,
             sqlite_busy_timeout_ms=int(
@@ -66,11 +91,20 @@ class Settings:
             ),
             parent_max_atoms=int(os.getenv("REINVENT_WEB_PARENT_MAX_ATOMS", "200")),
             worker_runner=os.getenv("REINVENT_WEB_WORKER_RUNNER", "fake"),
-            reinvent_runtime_python=_resolve_path(
+            reinvent_runtime_python=_executable_path(
                 os.getenv("REINVENT_RUNTIME_PYTHON"), Path(sys.executable)
             ),
             reinvent_source_root=_resolve_path(
                 os.getenv("REINVENT_SOURCE_ROOT"), repository_root
+            ),
+            internal_api_base_url=os.getenv(
+                "REINVENT_WEB_INTERNAL_API_BASE_URL", "http://127.0.0.1:8000"
+            ).rstrip("/"),
+            chemprop_runtime_python=_executable_path(
+                os.getenv("CHEMPROP_V2_PYTHON"), repository_root / ".runtimes" / "chemprop-v2" / "bin" / "python"
+            ),
+            qsartuna_runtime_python=_executable_path(
+                os.getenv("QSARTUNA_PYTHON"), repository_root / ".runtimes" / "qsartuna" / "bin" / "python"
             ),
         )
 

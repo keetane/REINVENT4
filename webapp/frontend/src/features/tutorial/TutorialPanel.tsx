@@ -1,73 +1,44 @@
-interface Props {
-  onUseSample: (modelKey: string, smiles: string) => void;
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { tutorialContent } from "../../i18n/tutorialContent";
+
+interface Props { onUseSample: (modelKey: string, smiles: string) => void; onOpenTraining: () => void; }
+
+const OSS = [
+  ["REINVENT4", "4.5.11", "Apache-2.0", "https://github.com/MolecularAI/REINVENT4", "https://github.com/MolecularAI/REINVENT4/tree/main/docs"],
+  ["RDKit", "2024.9.6", "BSD-3-Clause", "https://github.com/rdkit/rdkit", "https://www.rdkit.org/docs/"],
+  ["scikit-learn", "1.6.1", "BSD-3-Clause", "https://github.com/scikit-learn/scikit-learn", "https://scikit-learn.org/stable/"],
+  ["Chemprop", "2.3.1", "MIT", "https://github.com/chemprop/chemprop", "https://chemprop.readthedocs.io/"],
+  ["QSARtuna", "4.0.1", "Apache-2.0 (pyproject)", "https://github.com/MolecularAI/QSARtuna", "https://github.com/MolecularAI/QSARtuna#readme"],
+  ["LightGBM", "4.7.0", "MIT", "https://github.com/microsoft/LightGBM", "https://lightgbm.readthedocs.io/"],
+  ["XGBoost", "3.2.0", "Apache-2.0", "https://github.com/dmlc/xgboost", "https://xgboost.readthedocs.io/"],
+  ["CatBoost", "1.2.10", "Apache-2.0", "https://github.com/catboost/catboost", "https://catboost.ai/docs/"],
+  ["PyTorch", "2.6.0 / 2.14.1", "BSD-3-Clause", "https://github.com/pytorch/pytorch", "https://pytorch.org/docs/stable/"],
+];
+
+export function TutorialPanel({ onUseSample, onOpenTraining }: Props) {
+  const { i18n } = useTranslation();
+  const language = i18n.language.startsWith("en") ? "en" : "ja";
+  const content = tutorialContent[language];
+  const [selected, setSelected] = useState("reinvent");
+  const generator = content.generators.find((item) => item.key === selected) ?? content.generators[0];
+  const labels = content.labels;
+  return <div className="tutorial-panel">
+    <div className="section-heading tutorial-hero"><div><p className="section-kicker">00 · TUTORIAL</p><h2>{content.title}</h2><p>{content.intro}</p></div><span className="tutorial-chip">LOCAL WORKSPACE</span></div>
+    <section className="tutorial-section"><div className="tutorial-section-title"><span>01</span><div><h3>{content.chooseTitle}</h3></div></div>
+      <div className="decision-tree">{content.decisionTree.map((item) => <span key={item}>{item}</span>)}</div>
+      <div className="tutorial-model-picker field-group"><label htmlFor="tutorial-model">Model</label><select id="tutorial-model" value={selected} onChange={(event) => setSelected(event.target.value)}>{content.generators.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></div>
+      <article className="tutorial-model-card"><div className="tutorial-model-copy"><span className="example-label">{generator.name}</span><p><strong>{labels.purpose}</strong>{generator.purpose}</p><p><strong>{labels.research}</strong>{generator.research}</p><p><strong>{labels.input}</strong>{generator.input}</p><p><strong>{labels.parent}</strong>{generator.parent}</p><p><strong>{labels.output}</strong>{generator.output}</p></div><div className="tutorial-example">{generator.key === "reinvent" ? <span className="tutorial-no-parent">{content.noParent}</span> : <code>{generator.example}</code>}<button className="button secondary" type="button" onClick={() => onUseSample(generator.key, generator.key === "reinvent" ? "" : generator.example)}>{labels.use}</button></div></article>
+    </section>
+    <section className="tutorial-section"><div className="tutorial-section-title"><span>02</span><div><h3>Transfer Learning</h3><p>{content.step2Title}</p></div></div><ol className="tutorial-training-steps"><li><strong>Sampling</strong><span>{content.sampling}</span></li><li><strong>Transfer Learning</strong><span>{content.tl}</span></li><li><strong>Reinforcement Learning</strong><span>{content.rl}</span></li><li><strong>TL → RL</strong><span>{content.tlrl}</span></li></ol><button className="button secondary" type="button" onClick={onOpenTraining}>{content.openTraining}</button></section>
+    <section className="tutorial-section"><div className="tutorial-section-title"><span>03</span><div><h3>{content.qsarTitle}</h3><p>{content.qsar}</p></div></div><div className="workflow-flow" aria-label={content.workflowTitle}>{content.workflowSteps.map((item, index) => <div key={item}><span>{item}</span>{index < content.workflowSteps.length - 1 && <b>→</b>}</div>)}</div></section>
+    <section className="tutorial-section"><div className="tutorial-section-title"><span>04</span><div><h3>QSAR / Model Comparison / RL</h3></div></div><ol className="tutorial-training-steps">{content.modelingSteps.map((item) => <li key={item.title}><strong>{item.title}</strong><span>{item.body}</span></li>)}</ol></section>
+    <section className="tutorial-section oss-section"><div className="tutorial-section-title"><span>05</span><div><h3>{content.ossTitle}</h3></div></div><div className="qsar-preview"><table><thead><tr><th>OSS</th><th>Version</th><th>License</th><th>{labels.source}</th><th>{labels.docs}</th></tr></thead><tbody>{OSS.map((item) => <tr key={item[0]}><td>{item[0]}</td><td>{item[1]}</td><td>{item[2]}</td><td><a href={item[3]} target="_blank" rel="noreferrer">GitHub ↗</a></td><td><a href={item[4]} target="_blank" rel="noreferrer">Docs ↗</a></td></tr>)}</tbody></table></div><p className="oss-exclusion-note"><strong>{content.noRocs}</strong></p></section>
+    <section className="tutorial-section installation-section"><div className="tutorial-section-title"><span>06</span><div><h3>{content.installationTitle}</h3><p>{content.installationIntro}</p></div></div><p className="tutorial-note">{content.installation.title}</p><div className="installation-grid"><CommandList title={labels.mac} commands={content.installation.mac} /><CommandList title={labels.ubuntu} commands={content.installation.ubuntu} /><CommandList title={labels.verify} commands={content.installation.verify} /></div></section>
+  </div>;
 }
 
-const LIBINVENT_SAMPLE = "N#CC[C@H](C1CCCC1)[*:1]";
-const LINKINVENT_SAMPLE = "Oc1cncc(*)c1|*c1ccoc1";
-
-export function TutorialPanel({ onUseSample }: Props) {
-  return (
-    <div className="tutorial-panel">
-      <div className="section-heading tutorial-hero">
-        <div>
-          <p className="section-kicker">00 · TUTORIAL</p>
-          <h2>分子生成をはじめる</h2>
-          <p>モデルごとの親分子の書き方から、生成結果の比較・保存までを短く確認できます。</p>
-        </div>
-        <span className="tutorial-chip">LOCAL WORKSPACE</span>
-      </div>
-
-      <section className="tutorial-section">
-        <div className="tutorial-section-title"><span>01</span><div><h3>基本の流れ</h3><p>入力から解析まで4ステップです。</p></div></div>
-        <ol className="tutorial-steps">
-          <li><strong>モデルを選ぶ</strong><span>変換方法に合わせてMol2Mol、LibInvent、LinkInventなどを選択します。</span></li>
-          <li><strong>親分子を入力</strong><span>SMILESを貼り付けるか、Ketcherで構造を描画します。</span></li>
-          <li><strong>生成を実行</strong><span>生成件数とCPU・GPU・MPSを選び、ジョブを開始します。</span></li>
-          <li><strong>結果を解析</strong><span>構造、物性、類似度を絞り込み、CSVまたはSDFで保存します。</span></li>
-        </ol>
-      </section>
-
-      <section className="tutorial-section">
-        <div className="tutorial-section-title"><span>02</span><div><h3>LibInvent</h3><p>scaffoldを固定し、接続点から側鎖を生成します。</p></div></div>
-        <div className="tutorial-example">
-          <div><span className="example-label">SAMPLE SMILES</span><code>{LIBINVENT_SAMPLE}</code></div>
-          <button className="button secondary" type="button" onClick={() => onUseSample("libinvent", LIBINVENT_SAMPLE)}>この例を使う</button>
-        </div>
-        <p className="tutorial-note"><code>*</code> が側鎖の接続点です。各接続点はscaffoldの原子1個に結合させます。</p>
-      </section>
-
-      <section className="tutorial-section">
-        <div className="tutorial-section-title"><span>03</span><div><h3>LinkInvent</h3><p>2つのwarheadを固定し、その間をつなぐlinkerを生成します。</p></div></div>
-        <div className="tutorial-example">
-          <div><span className="example-label">SAMPLE SMILES</span><code>{LINKINVENT_SAMPLE}</code></div>
-          <button className="button secondary" type="button" onClick={() => onUseSample("linkinvent", LINKINVENT_SAMPLE)}>この例を使う</button>
-        </div>
-        <p className="tutorial-note">各warheadに接続点 <code>*</code> を1個置き、2つのSMILESを <code>|</code> で区切ります。</p>
-      </section>
-
-      <section className="tutorial-section">
-        <div className="tutorial-section-title"><span>04</span><div><h3>解析結果の見方</h3><p>医薬品らしさ、合成容易性、構造多様性をまとめて比較できます。</p></div></div>
-        <div className="tutorial-property-grid">
-          <div><strong>基本物性</strong><span>MW、LogP、TPSA、HBD、HBA、RotB</span></div>
-          <div><strong>品質指標</strong><span>QED、SA Score、Lipinski違反数</span></div>
-          <div><strong>構造指標</strong><span>環数、芳香環数、Fsp³、重原子数、形式電荷、MolMR</span></div>
-          <div><strong>類似度</strong><span>ParentSimilarity、ScaffoldSimilarity</span></div>
-        </div>
-      </section>
-
-      <section className="tutorial-section oss-section">
-        <div className="tutorial-section-title"><span>05</span><div><h3>使用している主なOSS</h3><p>本アプリは次のオープンソースソフトウェアを利用しています。</p></div></div>
-        <div className="oss-grid">
-          <div><strong>REINVENT4</strong><span>分子生成 · Apache-2.0</span></div>
-          <div><strong>RDKit</strong><span>化学構造・物性計算 · BSD-3-Clause</span></div>
-          <div><strong>Ketcher</strong><span>構造描画エディタ · Apache-2.0</span></div>
-          <div><strong>FastAPI</strong><span>APIサーバー · MIT</span></div>
-          <div><strong>React</strong><span>ユーザーインターフェース · MIT</span></div>
-          <div><strong>Vite</strong><span>フロントエンド開発環境 · MIT</span></div>
-          <div><strong>SQLite</strong><span>ジョブデータベース · Public Domain</span></div>
-        </div>
-        <p className="tutorial-note">配布時は同梱される各OSSのライセンス本文とバージョン別の表示を確認してください。</p>
-      </section>
-    </div>
-  );
+function CommandList({ title, commands }: { title: string; commands: string[] }) {
+  return <article><h4>{title}</h4><pre>{commands.join("\n")}</pre></article>;
 }
