@@ -33,4 +33,5 @@ addopts = "-q"
 testpaths = ["tests"]
 markers = [
   "reinvent: model-backed smoke tests requiring an explicit runtime",
+  "external_qsar: real Chemprop, QSARtuna, and MLP runtime smoke tests",
 ]

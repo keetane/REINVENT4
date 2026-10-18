@@ -526,7 +526,13 @@ class Worker:
                 return exit_code
             now = time.monotonic()
             if now >= next_progress_scan:
-                last_epoch = self._update_log_progress(job, log_path, last_epoch)
+                try:
+                    last_epoch = self._update_log_progress(job, log_path, last_epoch)
+                except (OSError, RuntimeError, TypeError, ValueError):
+                    # Progress extraction is best-effort. A malformed or partial
+                    # log line must never turn a successful training process into
+                    # a failed job.
+                    pass
                 next_progress_scan = now + 1.0
             if self.repository.get(job.id).status == JobStatus.CANCELLING:
                 self._terminate_process_group(process)
@@ -555,8 +561,11 @@ class Worker:
         if epoch <= last_epoch or total < 1:
             return last_epoch
         tail = text[matches[-1].start():]
-        train_matches = re.findall(r"(?:train_loss_epoch|loss)\s*[:=]\s*([0-9.eE+-]+)", tail)
-        validation_matches = re.findall(r"val_loss\s*[:=]\s*([0-9.eE+-]+)", tail)
+        number = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+        # The trailing boundary prevents checkpoint names such as
+        # `val_loss=0.42.ckpt` from being parsed as the invalid float `0.42.`.
+        train_matches = re.findall(rf"(?:train_loss_epoch|(?<![\w])loss)\s*[:=]\s*({number})(?![\w.])", tail)
+        validation_matches = re.findall(rf"val_loss\s*[:=]\s*({number})(?![\w.])", tail)
         self.repository.set_training_progress(
             job.id,
             epoch=min(epoch, total),

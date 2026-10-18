@@ -51,6 +51,7 @@ def train(config_path: Path, repository_root: Path) -> None:
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle); writer.writerow(["Canonical_SMILES", "Target"]); writer.writerows(zip(values, labels))
     hp = config.get("hyperparameters", {}) if config.get("advanced") else {}
+    timeout_seconds = int(hp.get("timeout_seconds", 3600))
     runner = Path(__file__).with_name("qsartuna_runner.py")
     build_config = work_dir / "best-build-config.json"
     environment = {**os.environ, "NUMBA_DISABLE_JIT": "1", "MPLCONFIGDIR": str(work_dir / "matplotlib")}
@@ -59,9 +60,14 @@ def train(config_path: Path, repository_root: Path) -> None:
         "--model", str(output_model), "--build-config", str(build_config), "--task-type", config["task_type"],
         "--split-method", config["split_method"], "--folds", str(config["cross_validation_folds"]),
         "--trials", str(int(hp.get("n_trials", 30))), "--startup-trials", str(int(hp.get("n_startup_trials", 10))),
-    ], check=True, env=environment)
+    ], check=True, env=environment, timeout=timeout_seconds)
     predictor = Path(__file__).with_name("external_qsar_predictor.py")
-    completed = subprocess.run([str(runtime), str(predictor), "--algorithm", "qsartuna", "--model", str(output_model), "--training-dataset", str(train_csv), "--ad-threshold", "0"], input="\n".join(str(value) for value in test_smiles) + "\n", text=True, capture_output=True, check=True, env=environment)
+    predictor_metadata = work_dir / "predictor-metadata.json"
+    predictor_metadata.write_text(json.dumps({"metadata": config}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    completed = subprocess.run([
+        str(runtime), str(predictor), "--algorithm", "qsartuna", "--model", str(output_model),
+        "--training-dataset", str(train_csv), "--ad-threshold", "0", "--metadata", str(predictor_metadata),
+    ], input="\n".join(str(value) for value in test_smiles) + "\n", text=True, capture_output=True, check=True, env=environment)
     predicted = np.asarray(json.loads(completed.stdout)["payload"]["predictions"], dtype=float)
     train_fps = [ad_fingerprint(str(value)) for value in train_smiles]
     similarities = []
