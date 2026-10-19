@@ -379,10 +379,12 @@ def build_rl_command(settings: Settings, job: JobRecord, job_dir: Path) -> Reinv
         model_path = (settings.repository_root / component["model_path"]).resolve()
         if not model_path.is_relative_to(settings.qsar_model_store_dir) or not model_path.is_file():
             raise AdapterConfigurationError("QSAR component model path is invalid")
+        dataset_path = (settings.repository_root / component.get("dataset_path", "")).resolve()
+        if not dataset_path.is_relative_to(settings.repository_root) or not dataset_path.is_file():
+            raise AdapterConfigurationError("QSAR component training dataset is invalid")
         if component.get("algorithm") in {"chemprop_v2", "qsartuna"}:
             runtime = Path(component["external_runtime_python"]).resolve()
             predictor = Path(__file__).resolve().parents[2] / "worker" / "external_qsar_predictor.py"
-            dataset_path = (settings.repository_root / component["dataset_path"]).resolve()
             metadata_path = (settings.repository_root / component["evaluation_path"]).resolve()
             if not runtime.is_file() or not predictor.is_file() or not dataset_path.is_file() or not metadata_path.is_file():
                 raise AdapterConfigurationError("External QSAR runtime or artifact is missing")
@@ -406,6 +408,7 @@ def build_rl_command(settings: Settings, job: JobRecord, job_dir: Path) -> Reinv
                     "", "[[stage.scoring.component]]", "[stage.scoring.component.QsarApplicabilityDomain]",
                     "[[stage.scoring.component.QsarApplicabilityDomain.endpoint]]",
                     f"name = {_toml_string('QSAR AD: ' + component['model_name'])}",
+                    'params.model_file = ""',
                     f"params.dataset_file = {_toml_string(dataset_path)}",
                     f"params.threshold = {float(component['ad_threshold'])}",
                 ])
@@ -418,6 +421,7 @@ def build_rl_command(settings: Settings, job: JobRecord, job_dir: Path) -> Reinv
             f"name = {_toml_string('QSAR: ' + component['model_name'])}",
             f"weight = {float(component['weight'])}",
             f"params.model_file = {_toml_string(model_path)}",
+            f"params.dataset_file = {_toml_string((settings.repository_root / component['dataset_path']).resolve())}",
             f"params.task_type = {_toml_string(component['task_type'])}",
             f"params.ad_threshold = {float(component['ad_threshold']) if component['ad_behavior'] == 'penalize' else 0.0}",
             "params.below_ad_score = 0.0",
@@ -430,6 +434,7 @@ def build_rl_command(settings: Settings, job: JobRecord, job_dir: Path) -> Reinv
                 "[[stage.scoring.component.QsarApplicabilityDomain.endpoint]]",
                 f"name = {_toml_string('QSAR AD: ' + component['model_name'])}",
                 f"params.model_file = {_toml_string(model_path)}",
+                f"params.dataset_file = {_toml_string(dataset_path)}",
                 f"params.threshold = {float(component['ad_threshold'])}",
             ])
     for component in conditions.get("property_components", []):
