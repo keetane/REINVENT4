@@ -457,7 +457,7 @@ export function App() {
         </section>
       ) : activeView === "rl" ? (
         <section className="workspace-card">
-          <RlPanel models={models} onCreated={(job) => void handleTrainingCreated(job)} onDeleteModel={handleDeleteModel} />
+          <RlPanel models={models} onCreated={(job) => void handleTrainingCreated(job)} onDeleteModel={handleDeleteModel} onModelsChanged={refreshModels} />
         </section>
       ) : activeView === "jobs" ? (
         <section className="workspace-card jobs-card">

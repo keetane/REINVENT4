@@ -413,6 +413,9 @@ footer { display: flex; justify-content: space-between; padding: 18px 4px; color
 .model-row span { color: var(--muted); font-size: .76rem; }
 .model-upload { margin-top: 16px; padding-top: 18px; border-top: 1px solid var(--line); }
 .model-upload h4 { margin: 0 0 6px; }
+.model-upload-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 12px; }
+.model-upload-row .field-group { flex: 1; min-width: 0; }
+.model-upload-row .button { flex: 0 0 auto; white-space: nowrap; }
 .model-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
 
 .qsar-panel { display: grid; gap: 24px; }
@@ -529,6 +532,8 @@ footer { display: flex; justify-content: space-between; padding: 18px 4px; color
   .histogram-list { grid-template-columns: 1fr; }
   .training-summary { grid-template-columns: 1fr; }
   .model-row { align-items: stretch; flex-direction: column; }
+  .model-upload-row { align-items: stretch; flex-direction: column; }
+  .model-upload-row .button { width: 100%; }
   .model-upload-grid { grid-template-columns: 1fr; }
   .qsar-summary { grid-template-columns: repeat(2, 1fr); }
   .qsar-model-card { align-items: stretch; flex-direction: column; }

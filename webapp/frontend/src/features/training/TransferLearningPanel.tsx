@@ -14,6 +14,7 @@ import {
 import { isDataUploadTooLarge, suggestSmilesColumn } from "../../lib/uploads";
 import { StandardizationNotice } from "../standardization/StandardizationNotice";
 import { NumericInput } from "../../components/NumericInput";
+import { inferModelFilename, type GenerationUploadMetadata } from "../../lib/modelFilename";
 
 type Device = "cpu" | "cuda" | "mps";
 
@@ -46,9 +47,7 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel, onMode
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadName, setUploadName] = useState("");
-  const [uploadSource, setUploadSource] = useState<"transfer_learning" | "reinforcement_learning">("transfer_learning");
-  const [uploadType, setUploadType] = useState<"reinvent" | "mol2mol">("reinvent");
+  const [uploadMetadata, setUploadMetadata] = useState<GenerationUploadMetadata | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
 
   const trainedModels = useMemo(
@@ -145,23 +144,39 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel, onMode
   );
 
   const handleUpload = async () => {
-    if (!uploadFile || !uploadName.trim()) return;
+    if (!uploadFile || !uploadMetadata) return;
     setUploadBusy(true);
     setError(null);
     try {
       await uploadModel(uploadFile, {
-        name: uploadName,
-        modelType: uploadType,
-        baseModelKey: uploadType === "reinvent" ? "reinvent" : "mol2mol_scaffold_generic",
-        source: uploadSource
+        name: uploadMetadata.comment,
+        modelType: uploadMetadata.modelType,
+        baseModelKey: uploadMetadata.baseModelKey,
+        source: uploadMetadata.source
       });
       setUploadFile(null);
-      setUploadName("");
+      setUploadMetadata(null);
       await onModelsChanged();
     } catch (uploadError) {
       setError(errorMessage(uploadError, t("tl.uploadError")));
     } finally {
       setUploadBusy(false);
+    }
+  };
+
+  const handleUploadFile = (file: File | undefined) => {
+    setUploadFile(file ?? null);
+    if (!file) {
+      setUploadMetadata(null);
+      return;
+    }
+    const inferred = inferModelFilename(file.name);
+    if (inferred?.kind === "generation") {
+      setUploadMetadata(inferred);
+      setError(null);
+    } else {
+      setUploadMetadata(null);
+      setError(t("tl.uploadFilenameError"));
     }
   };
 
@@ -308,13 +323,14 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel, onMode
         <div className="model-upload">
           <h4>{t("tl.uploadTitle")}</h4>
           <p className="field-hint">{t("tl.uploadHint")}</p>
-          <div className="model-upload-grid">
-            <div className="field-group"><label htmlFor="model-upload-file">{t("tl.uploadFile")}</label><input id="model-upload-file" type="file" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /></div>
-            <div className="field-group"><label htmlFor="model-upload-name">{t("tl.uploadName")}</label><input id="model-upload-name" value={uploadName} onChange={(event) => setUploadName(event.target.value)} placeholder="external_model" /></div>
-            <div className="field-group"><label htmlFor="model-upload-source">{t("tl.uploadSource")}</label><select id="model-upload-source" value={uploadSource} onChange={(event) => setUploadSource(event.target.value as typeof uploadSource)}><option value="transfer_learning">Transfer Learning</option><option value="reinforcement_learning">Reinforcement Learning</option></select></div>
-            <div className="field-group"><label htmlFor="model-upload-type">{t("tl.uploadType")}</label><select id="model-upload-type" value={uploadType} onChange={(event) => setUploadType(event.target.value as typeof uploadType)}><option value="reinvent">Reinvent</option><option value="mol2mol">Mol2Mol</option></select></div>
+          <div className="model-upload-row">
+            <div className="field-group">
+              <label htmlFor="model-upload-file">{t("tl.uploadFile")}</label>
+              <input id="model-upload-file" type="file" accept=".model,.chkpt,.pt,.pth,.zip" onChange={(event) => handleUploadFile(event.target.files?.[0])} />
+            </div>
+            <button className="button quiet" type="button" disabled={!uploadFile || !uploadMetadata || uploadBusy} onClick={() => void handleUpload()}>{uploadBusy ? t("tl.uploading") : t("tl.upload")}</button>
           </div>
-          <button className="button quiet" type="button" disabled={!uploadFile || !uploadName.trim() || uploadBusy} onClick={() => void handleUpload()}>{uploadBusy ? t("tl.uploading") : t("tl.upload")}</button>
+          {uploadMetadata && <p className="field-hint">{t("tl.uploadDetected", { source: uploadMetadata.source, type: uploadMetadata.modelType, comment: uploadMetadata.comment })}</p>}
         </div>
       </div>
     </div>

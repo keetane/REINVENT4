@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 
 import {
   ApiError, createRlJob, getRlCapabilities, listQsarModels, previewRlScoring,
-  modelArtifactUrl, type Job, type ModelInfo, type QsarModel, type RlPreviewRow, type RlPropertyComponent, type RlQsarComponent
+  modelArtifactUrl, uploadModel, type Job, type ModelInfo, type QsarModel, type RlPreviewRow, type RlPropertyComponent, type RlQsarComponent
 } from "../../api/client";
 import { StandardizationNotice } from "../standardization/StandardizationNotice";
 import { NumericInput } from "../../components/NumericInput";
+import { inferModelFilename } from "../../lib/modelFilename";
 
-interface Props { models: ModelInfo[]; onCreated: (job: Job) => void; onDeleteModel: (modelId: string) => Promise<void>; }
+interface Props { models: ModelInfo[]; onCreated: (job: Job) => void; onDeleteModel: (modelId: string) => Promise<void>; onModelsChanged?: () => Promise<unknown>; }
 
 type QsarGoal = "maximize" | "minimize" | "range" | "target";
 type QsarSetting = RlQsarComponent & { goal: QsarGoal; target: number; tolerance: number };
@@ -22,7 +23,7 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-export function RlPanel({ models, onCreated, onDeleteModel }: Props) {
+export function RlPanel({ models, onCreated, onDeleteModel, onModelsChanged }: Props) {
   const { t } = useTranslation();
   const generationModels = useMemo(() => models.filter((model) =>
     ["reinvent", "mol2mol"].includes(model.model_type) &&
@@ -50,6 +51,9 @@ export function RlPanel({ models, onCreated, onDeleteModel }: Props) {
   const [preview, setPreview] = useState<RlPreviewRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMetadata, setUploadMetadata] = useState<ReturnType<typeof inferModelFilename>>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
   const selectedGeneration = generationModels.find((model) => model.id === generationModelId);
   const mol2mol = selectedGeneration?.model_type === "mol2mol";
   const trainedModels = useMemo(() => models.filter((model) => model.source === "reinforcement_learning"), [models]);
@@ -109,6 +113,21 @@ export function RlPanel({ models, onCreated, onDeleteModel }: Props) {
     } catch (reason) { setError(errorMessage(reason, t("rl.error"))); } finally { setBusy(false); }
   };
 
+  const uploadGenerationModel = async () => {
+    if (!uploadFile || !uploadMetadata || uploadMetadata.kind !== "generation") return;
+    setUploadBusy(true); setError(null);
+    try {
+      await uploadModel(uploadFile, {
+        name: uploadMetadata.comment,
+        modelType: uploadMetadata.modelType,
+        baseModelKey: uploadMetadata.baseModelKey,
+        source: uploadMetadata.source
+      });
+      setUploadFile(null); setUploadMetadata(null);
+      await onModelsChanged?.();
+    } catch (reason) { setError(errorMessage(reason, t("rl.uploadError"))); } finally { setUploadBusy(false); }
+  };
+
   const testScoring = async () => {
     setBusy(true); setError(null);
     try {
@@ -152,6 +171,13 @@ export function RlPanel({ models, onCreated, onDeleteModel }: Props) {
     <section className="model-management rl-model-management">
       <div className="section-heading compact"><div><p className="section-kicker">MODEL REGISTRY</p><h3>{t("rl.registry")}</h3></div></div>
       {trainedModels.length === 0 ? <div className="empty-state">{t("rl.empty")}</div> : <div className="model-list">{trainedModels.map((model) => <article className="model-row" key={model.id}><div><strong>{model.name}</strong><span>{model.model_type.toUpperCase()} · {model.created_at ? new Date(model.created_at).toLocaleString() : "—"}</span></div><a className="button quiet" href={modelArtifactUrl(model.id, "model")} download>{t("rl.modelDownload")}</a><button className="button danger" type="button" onClick={() => { if (window.confirm(t("tl.deleteConfirm", { name: model.name }))) void onDeleteModel(model.id); }}>{t("common.delete")}</button></article>)}</div>}
+      <div className="model-upload">
+        <h4>{t("rl.uploadTitle")}</h4>
+        <p className="field-hint">{t("rl.uploadHint")}</p>
+        <input type="file" accept=".model,.chkpt,.pt,.pth,.zip" onChange={(event) => { const file = event.target.files?.[0]; const inferred = file ? inferModelFilename(file.name) : null; setUploadFile(file ?? null); setUploadMetadata(inferred); if (file && inferred?.kind !== "generation") setError(t("rl.uploadFilenameError")); }} />
+        {uploadMetadata?.kind === "generation" && <p className="field-hint">{t("rl.uploadDetected", { source: uploadMetadata.source, type: uploadMetadata.modelType, comment: uploadMetadata.comment })}</p>}
+        <button className="button quiet" type="button" disabled={!uploadMetadata || uploadMetadata.kind !== "generation" || uploadBusy} onClick={() => void uploadGenerationModel()}>{uploadBusy ? t("rl.uploading") : t("rl.upload")}</button>
+      </div>
     </section>
   </div>;
 }

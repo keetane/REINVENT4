@@ -14,6 +14,7 @@ import {
   predictQsar,
   qsarArtifactUrl,
   registerQsarComparisonModel,
+  uploadQsarModel,
   validateParent,
   type Job,
   type ParentValidationResponse,
@@ -32,6 +33,7 @@ import {
 import { StandardizationNotice } from "../standardization/StandardizationNotice";
 import { ParentInput } from "../parent-input/ParentInput";
 import { NumericInput } from "../../components/NumericInput";
+import { inferModelFilename, type QsarUploadMetadata } from "../../lib/modelFilename";
 
 interface Props {
   onCreated: (job: Job) => void;
@@ -98,6 +100,9 @@ export function QsarPanel({ onCreated }: Props) {
   const [predictionResult, setPredictionResult] = useState<QsarPredictionRow | null>(null);
   const [predictionBusy, setPredictionBusy] = useState(false);
   const [predictionError, setPredictionError] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMetadata, setUploadMetadata] = useState<QsarUploadMetadata | null>(null);
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   const dataPayload = useMemo<QsarDataPayload>(() => ({
     file_name: fileName,
@@ -114,6 +119,30 @@ export function QsarPanel({ onCreated }: Props) {
   const refreshModels = async () => {
     const response = await listQsarModels();
     setModels(response.items);
+  };
+
+  const handleModelFile = (file: File | undefined) => {
+    setUploadFile(file ?? null);
+    const inferred = file ? inferModelFilename(file.name) : null;
+    setUploadMetadata(inferred?.kind === "qsar" ? inferred : null);
+    if (file && !inferred) setError(t("qsar.uploadFilenameError"));
+    else setError(null);
+  };
+
+  const uploadModelFile = async () => {
+    if (!uploadFile || !uploadMetadata) return;
+    setUploadBusy(true);
+    setError(null);
+    try {
+      await uploadQsarModel(uploadFile);
+      setUploadFile(null);
+      setUploadMetadata(null);
+      await refreshModels();
+    } catch (reason) {
+      setError(message(reason, t("qsar.uploadError")));
+    } finally {
+      setUploadBusy(false);
+    }
   };
 
   const openPrediction = (modelId: string) => {
@@ -378,6 +407,13 @@ export function QsarPanel({ onCreated }: Props) {
       <section className="model-management">
         <div className="section-heading compact"><div><p className="section-kicker">MODEL REGISTRY</p><h3>{t("qsar.registry")}</h3></div><button type="button" className="button quiet" onClick={() => void refreshModels()}>{t("jobs.refresh")}</button></div>
         {models.length === 0 ? <div className="empty-state">{t("qsar.noModels")}</div> : <div className="qsar-model-list">{models.map((model) => <article className={`qsar-model-card ${predictionModelId === model.id ? "prediction-open" : ""}`} key={model.id}><div><strong>{model.name}</strong><span>{model.algorithm} · {model.task_type} · {model.target_name} ({model.target_unit}) · Train {model.training_data_count} / Test {model.test_data_count}</span><span>{model.task_type === "regression" ? `R² ${metric(model, "r2")} · RMSE ${metric(model, "rmse")} · MAE ${metric(model, "mae")}` : `ROC-AUC ${metric(model, "roc_auc")} · F1 ${metric(model, "f1")}`}</span>{evaluation?.modelId === model.id && <div className="qsar-plots">{Object.entries(evaluation.plots).map(([name, points]) => <MiniPlot key={name} name={name} points={points} />)}{Object.keys(evaluation.plots).length === 0 && <span>{t("qsar.noPlots")}</span>}</div>}</div><div className="qsar-model-actions"><button className="button primary" type="button" onClick={() => openPrediction(model.id)}>{predictionModelId === model.id ? t("qsar.closeEvaluation") : t("qsar.evaluate")}</button><button className="button quiet" type="button" onClick={() => void getQsarEvaluation(model.id).then((result) => setEvaluation({ modelId: model.id, plots: result.plots ?? {} })).catch((reason) => setError(message(reason, t("qsar.error"))))}>{t("qsar.details")}</button><a className="button quiet" href={qsarArtifactUrl(model.id, "evaluation")}>{t("qsar.evaluationJson")}</a><a className="button quiet" href={qsarArtifactUrl(model.id, "predictions")} download>{t("qsar.testPredictionsDownload")}</a><a className="button quiet" href={qsarArtifactUrl(model.id, "model")} download>{t("qsar.modelDownload")}</a><button className="button danger" type="button" disabled={model.in_use} onClick={() => void deleteQsarModel(model.id).then(refreshModels).catch((reason) => setError(message(reason, t("qsar.error"))))}>{t("common.delete")}</button></div>{predictionModelId === model.id && <section className="qsar-prediction-panel"><div><p className="section-kicker">SINGLE MOLECULE PREDICTION</p><h4>{t("qsar.evaluateTitle", { name: model.name })}</h4><p className="muted">{t("qsar.evaluateHint", { target: model.target_name, unit: model.target_unit })}</p></div><ParentInput smiles={predictionSmiles} modelKey="reinvent" validation={predictionValidation} busy={predictionBusy} error={predictionError} onSmilesChange={(value) => { setPredictionSmiles(value); setPredictionValidation(null); setPredictionResult(null); setPredictionError(null); }} onValidate={() => void validatePredictionSmiles()} inputLabel={t("qsar.evaluationSmiles")} inputHint={t("qsar.evaluationSmilesHint")} /><button className="button primary large" type="button" onClick={() => void calculatePrediction()} disabled={predictionBusy || !predictionSmiles.trim()}>{predictionBusy ? t("qsar.predicting") : t("qsar.calculatePrediction")}</button>{predictionResult && <div className={`qsar-prediction-result ${predictionResult.valid ? "valid" : "invalid"}`} role="status"><div><span>{t("qsar.predictedValue")}</span><strong>{predictionResult.prediction == null ? "—" : predictionResult.prediction.toFixed(5)}</strong><small>{model.task_type === "classification" ? t("qsar.classProbability") : model.target_unit}</small></div><div><span>{t("qsar.applicabilityDomain")}</span><strong>{predictionResult.in_ad ? "In" : "Out"}</strong><small>{t("qsar.nearestSimilarity", { value: predictionResult.nearest_tanimoto == null ? "—" : predictionResult.nearest_tanimoto.toFixed(3), threshold: model.ad_threshold.toFixed(3) })}</small></div><div><span>{t("qsar.standardizedStructure")}</span><code>{predictionResult.standardized_smiles ?? "—"}</code><small>MW {predictionResult.molecular_weight?.toFixed(2) ?? "—"} · Charge {predictionResult.formal_charge ?? "—"}</small></div>{predictionResult.error && <p className="notice error">{predictionResult.error}</p>}</div>}</section>}</article>)}</div>}
+        <div className="model-upload">
+          <h4>{t("qsar.uploadTitle")}</h4>
+          <p className="field-hint">{t("qsar.uploadHint")}</p>
+          <input type="file" accept=".joblib,.pkl,.ckpt,.model" onChange={(event) => { const file = event.target.files?.[0]; setUploadFile(file ?? null); const inferred = file ? inferModelFilename(file.name) : null; setUploadMetadata(inferred?.kind === "qsar" ? inferred : null); if (file && inferred?.kind !== "qsar") setError(t("qsar.uploadFilenameError")); }} />
+          {uploadMetadata && <p className="field-hint">{t("qsar.uploadDetected", { algorithm: uploadMetadata.algorithm, comment: uploadMetadata.comment })}</p>}
+          <button className="button quiet" type="button" disabled={!uploadMetadata || uploadBusy} onClick={() => void uploadModelFile()}>{uploadBusy ? t("qsar.uploading") : t("qsar.upload")}</button>
+        </div>
       </section>
     </div>
   );

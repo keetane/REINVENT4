@@ -12,7 +12,7 @@ from app.db.models import ModelRepository
 from app.errors import AppError
 from app.reinvent_adapter.models import MODEL_SPECS
 from app.schemas.models import ModelDeleteResponse, ModelListResponse, ModelResponse
-from app.services.naming import confined_path, next_artifact_filename, slugify_comment
+from app.services.naming import confined_path, infer_model_metadata, next_artifact_filename, slugify_comment
 from app.services.workspaces import relative_to_repository
 
 
@@ -88,10 +88,10 @@ def _safe_upload_comment(value: str) -> str:
 @router.post("/upload", response_model=ModelResponse, status_code=201)
 async def upload_model(
     request: Request,
-    name: str = Query(min_length=1, max_length=100),
-    model_type: str = Query(pattern="^(reinvent|mol2mol)$"),
-    base_model_key: str = Query(),
-    source: str = Query(default="transfer_learning", pattern="^(transfer_learning|reinforcement_learning)$"),
+    name: str | None = Query(default=None, min_length=1, max_length=100),
+    model_type: str | None = Query(default=None, pattern="^(reinvent|mol2mol)$"),
+    base_model_key: str | None = Query(default=None),
+    source: str | None = Query(default="transfer_learning", pattern="^(transfer_learning|reinforcement_learning)$"),
 ) -> ModelResponse:
     """Import a compatible REINVENT checkpoint into the model registry.
 
@@ -99,6 +99,19 @@ async def upload_model(
     optional multipart package and can handle large checkpoint files directly.
     """
     settings = request.app.state.settings
+    original_filename = request.headers.get("x-model-filename", "uploaded-model")
+    inferred = infer_model_metadata(original_filename)
+    if inferred is not None:
+        name = inferred["comment"]
+        model_type = inferred["model_type"]
+        base_model_key = inferred["base_model_key"]
+        source = inferred["source"]
+    if not name or not model_type or not base_model_key or not source:
+        raise AppError(
+            status_code=422,
+            code="model_metadata_required",
+            message="ファイル名から用途・種別を判定できないため、モデル情報を指定してください。",
+        )
     spec = MODEL_SPECS.get(base_model_key)
     if spec is None or spec.mode != model_type:
         raise AppError(status_code=422, code="incompatible_model_metadata", message="モデル種別とBase Modelの組み合わせが不正です。")
@@ -143,7 +156,7 @@ async def upload_model(
         "model_file_name": candidate,
         "base_model": model_type,
         "base_model_key": base_model_key,
-        "original_filename": request.headers.get("x-model-filename", "uploaded-model"),
+        "original_filename": original_filename,
     }
     JobRepository(settings).create_completed_import(
         job_id=job_id,

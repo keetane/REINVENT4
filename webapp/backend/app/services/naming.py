@@ -31,6 +31,76 @@ MODEL_TYPE_LABELS = {
     "elastic_net": "ElasticNet",
 }
 
+MODEL_FILENAME_KEYS = {
+    "reinvent": "reinvent",
+    "libinvent": "libinvent",
+    "linkinvent": "linkinvent",
+    "mol2mol": "mol2mol_scaffold_generic",
+    "mol2molhigh": "mol2mol_high",
+    "mol2molmedium": "mol2mol_medium",
+    "mol2molmmp": "mol2mol_mmp",
+    "mol2molscaffold": "mol2mol_scaffold",
+    "mol2molscaffoldgeneric": "mol2mol_scaffold_generic",
+    "mol2molsimilarity": "mol2mol_similarity",
+}
+
+QSAR_FILENAME_ALGORITHMS = {
+    "randomforest": "random_forest",
+    "svm": "svm",
+    "gradientboosting": "gradient_boosting",
+    "extratrees": "extra_trees",
+    "lightgbm": "lightgbm",
+    "xgboost": "xgboost",
+    "catboost": "catboost",
+    "kernelridge": "kernel_ridge",
+    "gaussianprocess": "gaussian_process",
+    "ridge": "ridge",
+    "elasticnet": "elastic_net",
+    "logisticregression": "logistic_regression",
+    "mlp": "mlp",
+    "chempropv2": "chemprop_v2",
+    "qsartuna": "qsartuna",
+}
+
+
+def _filename_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def infer_model_metadata(filename: str) -> dict[str, str] | None:
+    """Infer registry metadata from ``yyyymmdd_TL|RL_Type_comment.ext`` names."""
+    stem = Path(filename).stem
+    parts = stem.split("_")
+    if len(parts) < 4 or not re.fullmatch(r"\d{8}", parts[0]):
+        return None
+    source_token = parts[1].upper()
+    if source_token not in {"TL", "RL"}:
+        return None
+    model_key = MODEL_FILENAME_KEYS.get(_filename_token(parts[2]))
+    comment = "_".join(parts[3:])
+    if model_key is None or not comment:
+        return None
+    model_type = "mol2mol" if model_key.startswith("mol2mol") else "reinvent"
+    return {
+        "source": "reinforcement_learning" if source_token == "RL" else "transfer_learning",
+        "model_type": model_type,
+        "base_model_key": model_key,
+        "comment": slugify_comment(comment),
+    }
+
+
+def infer_qsar_metadata(filename: str) -> dict[str, str] | None:
+    """Infer a QSAR algorithm and display comment from a QSAR artifact name."""
+    stem = Path(filename).stem
+    parts = stem.split("_")
+    if len(parts) < 4 or not re.fullmatch(r"\d{8}", parts[0]) or parts[1].upper() != "QSAR":
+        return None
+    algorithm = QSAR_FILENAME_ALGORITHMS.get(_filename_token(parts[2]))
+    comment = "_".join(parts[3:])
+    if algorithm is None or not comment:
+        return None
+    return {"algorithm": algorithm, "comment": slugify_comment(comment)}
+
 
 def slugify_comment(comment: str, *, ascii_only: bool = False, max_length: int = 50) -> str:
     normalized = unicodedata.normalize("NFKC", comment).strip()

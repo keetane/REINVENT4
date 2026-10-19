@@ -4,7 +4,10 @@ import json
 import shutil
 import subprocess
 from functools import lru_cache
+from datetime import datetime
+from pathlib import Path
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Request, status
 from fastapi.responses import FileResponse
@@ -26,13 +29,14 @@ from app.schemas.qsar import (
     QsarModelListResponse,
     QsarModelResponse,
 )
-from app.services.naming import confined_path
+from app.services.naming import confined_path, infer_qsar_metadata, next_artifact_filename
 from app.services.qsar import _next_model_name, create_qsar_comparison_job, create_qsar_job, process_qsar_data
 from app.services.smiles_standardization import standardization_metadata
 from app.services.workspaces import relative_to_repository
 
 
 router = APIRouter(tags=["qsar"])
+MAX_QSAR_MODEL_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 
 
 @lru_cache(maxsize=4)
@@ -242,6 +246,104 @@ def register_qsar_comparison_model(request: Request, job_id: UUID, payload: Qsar
         evaluation_path=relative_to_repository(settings, evaluation_path),
         source_job_id=job_id,
         ad_threshold=float(conditions["ad_threshold"]),
+    )
+    return _model_response(repository, model)
+
+
+@router.post("/qsar-models/upload", response_model=QsarModelResponse, status_code=201)
+async def upload_qsar_model(request: Request) -> QsarModelResponse:
+    """Register a QSAR artifact named ``yyyymmdd_QSAR_Algorithm_comment.ext``."""
+    settings = request.app.state.settings
+    original_filename = request.headers.get("x-model-filename", "")
+    inferred = infer_qsar_metadata(original_filename)
+    if inferred is None:
+        raise AppError(status_code=422, code="qsar_model_metadata_required", message="ファイル名からQSARアルゴリズムとコメントを判定できません。")
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_QSAR_MODEL_UPLOAD_BYTES:
+                raise AppError(status_code=413, code="qsar_model_upload_too_large", message="QSARモデルは2 GiB以下にしてください。")
+        except ValueError as error:
+            raise AppError(status_code=400, code="invalid_content_length", message="アップロードサイズを確認できません。") from error
+    data = await request.body()
+    if not data:
+        raise AppError(status_code=422, code="empty_qsar_model_upload", message="QSARモデルファイルが空です。")
+    if len(data) > MAX_QSAR_MODEL_UPLOAD_BYTES:
+        raise AppError(status_code=413, code="qsar_model_upload_too_large", message="QSARモデルは2 GiB以下にしてください。")
+
+    algorithm = inferred["algorithm"]
+    comment = inferred["comment"]
+    existing_names = {model.name for model in QsarModelRepository(settings).list()}
+    display_name = comment
+    serial = 2
+    while display_name in existing_names:
+        display_name = f"{comment}_{serial}"
+        serial += 1
+    settings.qsar_model_store_dir.mkdir(parents=True, exist_ok=True)
+    extension = Path(original_filename).suffix.lower() or ".joblib"
+    candidate = next_artifact_filename(
+        settings.qsar_model_store_dir,
+        tab_type="QSAR",
+        model_key=algorithm,
+        comment=comment,
+        date=datetime.now(ZoneInfo(settings.app_timezone)),
+        extension=extension,
+    )
+    destination = settings.qsar_model_store_dir / candidate
+    destination.write_bytes(data)
+
+    task_type = request.headers.get("x-qsar-task-type", "regression")
+    if task_type not in {"regression", "classification"}:
+        raise AppError(status_code=422, code="invalid_qsar_task_type", message="QSARタスク種別が不正です。")
+    target_name = request.headers.get("x-qsar-target-name", "uploaded_target")
+    target_unit = request.headers.get("x-qsar-target-unit", "as_provided")
+    try:
+        ad_threshold = float(request.headers.get("x-qsar-ad-threshold", "0.4"))
+    except ValueError as error:
+        raise AppError(status_code=422, code="invalid_qsar_ad_threshold", message="AD閾値が不正です。") from error
+    if not 0 <= ad_threshold <= 1:
+        raise AppError(status_code=422, code="invalid_qsar_ad_threshold", message="AD閾値は0から1の範囲で指定してください。")
+
+    model_id = uuid4()
+    job_id = uuid4()
+    job_dir = (settings.jobs_dir / str(job_id)).resolve()
+    for name in ("input", "output"):
+        (job_dir / name).mkdir(parents=True, exist_ok=False)
+    dataset_path = job_dir / "input" / "uploaded-dataset.csv"
+    dataset_path.write_text("SMILES,Target\n", encoding="utf-8")
+    predictions_path = job_dir / "output" / "uploaded-predictions.csv"
+    predictions_path.write_text("Split,SMILES,Actual,Predicted\n", encoding="utf-8")
+    metrics = {"training_data_count": 1, "test_data_count": 1}
+    metadata = {
+        "algorithm": algorithm,
+        "uploaded": True,
+        "source_file_name": original_filename,
+        "smiles_standardization": standardization_metadata(),
+    }
+    evaluation_path = job_dir / "output" / "uploaded-evaluation.json"
+    evaluation_path.write_text(json.dumps({"metrics": metrics, "metadata": metadata, "plots": {}}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    conditions = {
+        "source": "qsar_upload", "model_upload": True, "model_name": display_name,
+        "model_file_name": candidate, "algorithm": algorithm, "task_type": task_type,
+        "target_name": target_name, "target_unit": target_unit,
+        "dataset_path": relative_to_repository(settings, dataset_path),
+        "predictions_path": relative_to_repository(settings, predictions_path),
+        "evaluation_path": relative_to_repository(settings, evaluation_path),
+        "original_filename": original_filename, "ad_threshold": ad_threshold,
+    }
+    JobRepository(settings).create_completed_import(
+        job_id=job_id, comment=display_name, run_conditions=conditions,
+        job_dir=relative_to_repository(settings, job_dir), job_type="qsar_training", model_id=model_id,
+    )
+    repository = QsarModelRepository(settings)
+    model = repository.register(
+        model_id=model_id, name=display_name, algorithm=algorithm, task_type=task_type,
+        target_name=target_name, target_unit=target_unit, training_data_count=1, test_data_count=1,
+        metrics=metrics, metadata=metadata, file_path=relative_to_repository(settings, destination),
+        dataset_path=relative_to_repository(settings, dataset_path),
+        predictions_path=relative_to_repository(settings, predictions_path),
+        evaluation_path=relative_to_repository(settings, evaluation_path), source_job_id=job_id,
+        ad_threshold=ad_threshold,
     )
     return _model_response(repository, model)
 

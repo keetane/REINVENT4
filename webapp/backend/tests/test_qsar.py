@@ -132,6 +132,24 @@ def test_qsar_training_job_registers_persistent_artifacts(settings):
     assert not (settings.repository_root / model.file_path).exists()
 
 
+def test_qsar_model_upload_infers_algorithm_and_comment(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/qsar-models/upload",
+            content=b"uploaded-joblib",
+            headers={
+                "Content-Type": "application/octet-stream",
+                "X-Model-Filename": "20261019_QSAR_RandomForest_chembl_p2x3.joblib",
+            },
+        )
+
+    assert response.status_code == 201
+    model = response.json()
+    assert model["name"] == "chembl_p2x3"
+    assert model["algorithm"] == "random_forest"
+    assert model["metadata"]["uploaded"] is True
+
+
 def test_unavailable_qsar_algorithms_are_rejected(settings):
     with TestClient(create_app(settings)) as client:
         response = client.post(

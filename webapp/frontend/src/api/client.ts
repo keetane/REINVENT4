@@ -429,6 +429,17 @@ export function qsarArtifactUrl(modelId: string, kind: "model" | "dataset" | "pr
   return `/api/qsar-models/${encodeURIComponent(modelId)}/artifacts/${kind}`;
 }
 
+export function uploadQsarModel(file: File): Promise<QsarModel> {
+  return request<QsarModel>("/api/qsar-models/upload", {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Model-Filename": file.name
+    }
+  });
+}
+
 export function getQsarEvaluation(modelId: string): Promise<{ metrics: Record<string, unknown>; metadata: Record<string, unknown>; plots?: Record<string, number[][]> }> {
   return request<{ metrics: Record<string, unknown>; metadata: Record<string, unknown>; plots?: Record<string, number[][]> }>(qsarArtifactUrl(modelId, "evaluation"));
 }
