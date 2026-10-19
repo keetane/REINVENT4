@@ -22,6 +22,7 @@ from app.db.qsar_models import QsarModelRepository
 from app.errors import AppError
 from app.reinvent_adapter.models import MODEL_SPECS
 from app.schemas.rl import QsarPredictionRequest, RlJobCreateRequest, RlPreviewRequest
+from app.services.naming import next_artifact_filename
 from app.services.workspaces import relative_to_repository
 from app.services.smiles_standardization import standardization_counts, standardization_metadata, standardize_smiles
 from app.services.training import checkpoint_compatibility
@@ -64,16 +65,11 @@ def _generation_model(settings: Settings, model_id: str):
     return prior_key, model.model_type, MODEL_SPECS[prior_key].relative_path, model.file_path
 
 
-def _next_rl_model_name(settings: Settings, comment: str) -> str:
-    date = datetime.now(ZoneInfo(settings.app_timezone)).strftime("%Y%m%d")
-    base = f"{date}_{comment}.rl"
-    existing = {path.stem for path in settings.model_store_dir.glob(f"{base}*.chkpt")}
-    candidate = base
-    serial = 2
-    while candidate in existing:
-        candidate = f"{base}_{serial}"
-        serial += 1
-    return f"{candidate}.chkpt"
+def _next_rl_model_name(settings: Settings, model_key: str, comment: str) -> str:
+    return next_artifact_filename(
+        settings.model_store_dir, tab_type="RL", model_key=model_key,
+        comment=comment, date=datetime.now(ZoneInfo(settings.app_timezone)), extension=".chkpt"
+    )
 
 
 def _input_smiles(settings: Settings, request: RlJobCreateRequest, model_type: str, agent_path: str) -> tuple[list[str], list, tuple[tuple[str, str], ...]]:
@@ -125,7 +121,7 @@ def create_rl_job(settings: Settings, request: RlJobCreateRequest) -> JobRecord:
         })
 
     settings.model_store_dir.mkdir(parents=True, exist_ok=True)
-    model_name = _next_rl_model_name(settings, request.comment)
+    model_name = _next_rl_model_name(settings, prior_key, request.comment)
     model_id = uuid4()
     job_id = uuid4()
     job_dir = (settings.jobs_dir / str(job_id)).resolve()

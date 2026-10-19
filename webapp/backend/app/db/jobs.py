@@ -141,6 +141,57 @@ class JobRepository:
             )
         return self.get(job_id)
 
+    def create_completed_import(
+        self,
+        *,
+        job_id: UUID,
+        comment: str,
+        run_conditions: dict[str, Any],
+        job_dir: str,
+        job_type: str = "transfer_learning",
+        model_id: UUID | None = None,
+    ) -> JobRecord:
+        """Record a model imported outside the training worker.
+
+        Uploaded models still need a source job because the model registry keeps
+        that relationship for lifecycle and usage checks.  This creates the
+        already-completed, audit-only job without putting it back in the worker
+        queue.
+        """
+        now = utc_now()
+        with connect(self.settings) as connection:
+            connection.execute(
+                """
+                INSERT INTO jobs (
+                    id, status, created_at, queued_at, started_at, finished_at,
+                    updated_at, comment_original, comment_slug,
+                    parent_smiles_input, run_conditions_json, job_dir,
+                    progress_message, progress_percent, job_type, model_id,
+                    metrics_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(job_id),
+                    JobStatus.COMPLETED.value,
+                    now,
+                    now,
+                    now,
+                    now,
+                    now,
+                    comment,
+                    comment,
+                    "",
+                    json.dumps(run_conditions, ensure_ascii=False, sort_keys=True),
+                    job_dir,
+                    JobStatus.COMPLETED.value,
+                    100.0,
+                    job_type,
+                    str(model_id) if model_id else None,
+                    "{}",
+                ),
+            )
+        return self.get(job_id)
+
     def get(self, job_id: UUID) -> JobRecord:
         with connect(self.settings) as connection:
             row = connection.execute(

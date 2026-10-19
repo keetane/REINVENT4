@@ -173,11 +173,15 @@ def _estimator(config):
     if algorithm == "lightgbm":
         from lightgbm import LGBMClassifier, LGBMRegressor
         params = {"n_estimators": 300, "learning_rate": 0.05, "max_depth": -1, "num_leaves": 31, "random_state": 42, "n_jobs": -1, "verbosity": -1}
+        if config.get("device") == "cuda":
+            params["device_type"] = "cuda"
         params.update(_bounded(supplied, {"n_estimators", "learning_rate", "max_depth", "num_leaves", "min_child_samples", "subsample", "colsample_bytree"}))
         return LGBMClassifier(**params) if classification else LGBMRegressor(**params)
     if algorithm == "xgboost":
         from xgboost import XGBClassifier, XGBRegressor
         params = {"n_estimators": 300, "learning_rate": 0.05, "max_depth": 6, "random_state": 42, "n_jobs": -1}
+        if config.get("device") == "cuda":
+            params.update({"tree_method": "hist", "device": "cuda"})
         params.update(_bounded(supplied, {"n_estimators", "learning_rate", "max_depth", "min_child_weight", "subsample", "colsample_bytree", "reg_alpha", "reg_lambda"}))
         if classification:
             params.update({"eval_metric": "logloss"})
@@ -186,6 +190,8 @@ def _estimator(config):
     if algorithm == "catboost":
         from catboost import CatBoostClassifier, CatBoostRegressor
         params = {"iterations": 300, "learning_rate": 0.05, "depth": 6, "random_seed": 42, "verbose": False, "allow_writing_files": False}
+        if config.get("device") == "cuda":
+            params.update({"task_type": "GPU", "devices": "0"})
         params.update(_bounded(supplied, {"iterations", "learning_rate", "depth", "l2_leaf_reg"}))
         return CatBoostClassifier(**params) if classification else CatBoostRegressor(**params)
     raise ValueError(f"unsupported algorithm: {algorithm}")

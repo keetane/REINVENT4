@@ -18,6 +18,7 @@ from app.db.jobs import JobRecord, JobRepository
 from app.errors import AppError
 from app.schemas.qsar import QsarComparisonCreateRequest, QsarDataRequest, QsarJobCreateRequest, QsarRejectedRow
 from app.services.csv_data import csv_dict_reader
+from app.services.naming import next_artifact_filename
 from app.services.smiles_standardization import (
     StandardizationResult,
     standardization_counts,
@@ -36,6 +37,27 @@ UNIT_TO_MOLAR = {
     "pM": 1e-12,
 }
 COMPARATOR = re.compile(r"^\s*[<>]=?")
+
+# These estimators expose a native CUDA backend in the libraries used by the
+# application. The remaining scikit-learn estimators are CPU-only, and none
+# of the non-Chemprop paths has an MPS implementation.
+CUDA_QSAR_ALGORITHMS = frozenset({"chemprop_v2", "lightgbm", "xgboost", "catboost"})
+MPS_QSAR_ALGORITHMS = frozenset({"chemprop_v2"})
+
+
+def validate_qsar_device(device: str, algorithms: list[str]) -> None:
+    if device == "cpu":
+        return
+    supported = CUDA_QSAR_ALGORITHMS if device == "cuda" else MPS_QSAR_ALGORITHMS
+    unsupported = [algorithm for algorithm in algorithms if algorithm not in supported]
+    if not unsupported:
+        return
+    names = ", ".join(unsupported)
+    if device == "cuda":
+        message = f"CUDA実行に対応していないアルゴリズムが含まれています: {names}。LightGBM、XGBoost、CatBoostまたはCPUを選択してください。"
+    else:
+        message = f"MPS実行に対応していないアルゴリズムが含まれています: {names}。MPSはChemprop v2のみ対応しています。"
+    raise AppError(status_code=422, code="qsar_device_unsupported", message=message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,19 +235,15 @@ def _write_qsar_audit_artifacts(job_dir: Path, data: ProcessedQsarData) -> tuple
     return accepted_path, rejected_path
 
 
-def _next_model_name(settings: Settings, comment: str) -> str:
-    date = datetime.now(ZoneInfo(settings.app_timezone)).strftime("%Y%m%d")
-    base = f"{date}_{comment}"
-    existing = {path.stem for path in settings.qsar_model_store_dir.glob(f"{base}*.*")}
-    candidate = base
-    serial = 2
-    while candidate in existing:
-        candidate = f"{base}_{serial}"
-        serial += 1
-    return candidate
+def _next_model_name(settings: Settings, algorithm: str, comment: str) -> str:
+    return next_artifact_filename(
+        settings.qsar_model_store_dir, tab_type="QSAR", model_key=algorithm,
+        comment=comment, date=datetime.now(ZoneInfo(settings.app_timezone)), extension=""
+    )
 
 
 def create_qsar_job(settings: Settings, request: QsarJobCreateRequest) -> JobRecord:
+    validate_qsar_device(request.device, [request.algorithm])
     if request.algorithm == "chemprop_v2" and (not settings.chemprop_runtime_python or not settings.chemprop_runtime_python.is_file()):
         raise AppError(status_code=422, code="chemprop_v2_unavailable", message="Chemprop v2の独立実行環境が見つかりません。")
     if request.algorithm == "qsartuna" and (not settings.qsartuna_runtime_python or not settings.qsartuna_runtime_python.is_file()):
@@ -249,7 +267,7 @@ def create_qsar_job(settings: Settings, request: QsarJobCreateRequest) -> JobRec
                 )
 
     settings.qsar_model_store_dir.mkdir(parents=True, exist_ok=True)
-    model_name = _next_model_name(settings, request.comment)
+    model_name = _next_model_name(settings, request.algorithm, request.comment)
     model_id = uuid4()
     job_id = uuid4()
     job_dir = (settings.jobs_dir / str(job_id)).resolve()
@@ -333,6 +351,7 @@ def create_qsar_job(settings: Settings, request: QsarJobCreateRequest) -> JobRec
 
 
 def create_qsar_comparison_job(settings: Settings, request: QsarComparisonCreateRequest) -> JobRecord:
+    validate_qsar_device(request.device, request.algorithms)
     data = process_qsar_data(request, max_atoms=settings.parent_max_atoms)
     minimum = max(6, request.cross_validation_folds + 2)
     if len(data.rows) < minimum:

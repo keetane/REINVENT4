@@ -5,12 +5,15 @@ import {
   ApiError,
   createTrainingJob,
   inspectTrainingData,
+  modelArtifactUrl,
+  uploadModel,
   type Job,
   type ModelInfo,
   type TrainingDataInspection
 } from "../../api/client";
 import { isDataUploadTooLarge, suggestSmilesColumn } from "../../lib/uploads";
 import { StandardizationNotice } from "../standardization/StandardizationNotice";
+import { NumericInput } from "../../components/NumericInput";
 
 type Device = "cpu" | "cuda" | "mps";
 
@@ -18,13 +21,14 @@ interface Props {
   models: ModelInfo[];
   onCreated: (job: Job) => void;
   onDeleteModel: (modelId: string) => Promise<void>;
+  onModelsChanged: () => Promise<unknown>;
 }
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
 }
 
-export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Props) {
+export function TransferLearningPanel({ models, onCreated, onDeleteModel, onModelsChanged }: Props) {
   const { t, i18n } = useTranslation();
   const [baseModel, setBaseModel] = useState<"reinvent" | "mol2mol">("reinvent");
   const [fileName, setFileName] = useState("");
@@ -41,6 +45,11 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Prop
   const [device, setDevice] = useState<Device>("mps");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState("");
+  const [uploadSource, setUploadSource] = useState<"transfer_learning" | "reinforcement_learning">("transfer_learning");
+  const [uploadType, setUploadType] = useState<"reinvent" | "mol2mol">("reinvent");
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   const trainedModels = useMemo(
     () => models.filter((model) => model.source === "transfer_learning"),
@@ -135,6 +144,27 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Prop
     inspection && inspection.valid_count >= 2 && fileName && validComment && !busy
   );
 
+  const handleUpload = async () => {
+    if (!uploadFile || !uploadName.trim()) return;
+    setUploadBusy(true);
+    setError(null);
+    try {
+      await uploadModel(uploadFile, {
+        name: uploadName,
+        modelType: uploadType,
+        baseModelKey: uploadType === "reinvent" ? "reinvent" : "mol2mol_scaffold_generic",
+        source: uploadSource
+      });
+      setUploadFile(null);
+      setUploadName("");
+      await onModelsChanged();
+    } catch (uploadError) {
+      setError(errorMessage(uploadError, t("tl.uploadError")));
+    } finally {
+      setUploadBusy(false);
+    }
+  };
+
   return (
     <div className="training-panel">
       <div className="section-heading">
@@ -210,34 +240,34 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Prop
         </div>
         <div className="field-group">
           <label htmlFor="train-percent">{t("tl.trainRatio")}</label>
-          <input id="train-percent" type="number" min={50} max={95} value={trainPercent} onChange={(event) => setTrainPercent(Number(event.target.value))} />
+          <NumericInput id="train-percent" min={50} max={95} value={trainPercent} onValueChange={setTrainPercent} />
           <p className="field-hint">{t("tl.trainRatioHint")}</p>
         </div>
         <div className="field-group">
           <label htmlFor="epochs">Epoch</label>
-          <input id="epochs" type="number" min={1} max={1000} value={epochs} onChange={(event) => setEpochs(Number(event.target.value))} />
+          <NumericInput id="epochs" min={1} max={1000} value={epochs} onValueChange={setEpochs} />
           <p className="field-hint">{t("tl.epochHint")}</p>
         </div>
         <div className="field-group">
           <label htmlFor="batch-size">Batch size</label>
-          <input id="batch-size" type="number" min={1} max={4096} value={batchSize} onChange={(event) => setBatchSize(Number(event.target.value))} />
+          <NumericInput id="batch-size" min={1} max={4096} value={batchSize} onValueChange={setBatchSize} />
           <p className="field-hint">{t("tl.batchHint")}</p>
         </div>
         <div className="field-group">
           <label htmlFor="learning-rate">Learning rate</label>
-          <input id="learning-rate" type="number" min={0.00000001} max={1} step={0.00001} value={learningRate} onChange={(event) => setLearningRate(Number(event.target.value))} />
+          <NumericInput id="learning-rate" min={0.00000001} max={1} step={0.00001} value={learningRate} onValueChange={setLearningRate} />
           <p className="field-hint">{t("tl.lrHint")}</p>
         </div>
         {baseModel === "mol2mol" && (
           <>
             <div className="field-group">
               <label htmlFor="tanimoto-lower">{t("tl.lower")}</label>
-              <input id="tanimoto-lower" type="number" min={0} max={1} step={0.05} value={tanimotoLower} onChange={(event) => setTanimotoLower(Number(event.target.value))} />
+              <NumericInput id="tanimoto-lower" min={0} max={1} step={0.05} value={tanimotoLower} onValueChange={setTanimotoLower} />
               <p className="field-hint">{t("tl.lowerHint")}</p>
             </div>
             <div className="field-group">
               <label htmlFor="tanimoto-upper">{t("tl.upper")}</label>
-              <input id="tanimoto-upper" type="number" min={0} max={1} step={0.05} value={tanimotoUpper} onChange={(event) => setTanimotoUpper(Number(event.target.value))} />
+              <NumericInput id="tanimoto-upper" min={0} max={1} step={0.05} value={tanimotoUpper} onValueChange={setTanimotoUpper} />
               <p className="field-hint">{t("tl.upperHint")}</p>
             </div>
           </>
@@ -267,6 +297,7 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Prop
                   <strong>{model.name}</strong>
                   <span>{model.model_type.toUpperCase()} · {model.training_data_count} · {model.created_at ? new Date(model.created_at).toLocaleString(i18n.language.startsWith("en") ? "en-US" : "ja-JP") : "—"}</span>
                 </div>
+                <a className="button quiet" href={modelArtifactUrl(model.id, "model")} download>{t("tl.modelDownload")}</a>
                 <button className="button danger" type="button" onClick={() => {
                   if (window.confirm(t("tl.deleteConfirm", { name: model.name }))) void onDeleteModel(model.id);
                 }}>{t("common.delete")}</button>
@@ -274,6 +305,17 @@ export function TransferLearningPanel({ models, onCreated, onDeleteModel }: Prop
             ))}
           </div>
         )}
+        <div className="model-upload">
+          <h4>{t("tl.uploadTitle")}</h4>
+          <p className="field-hint">{t("tl.uploadHint")}</p>
+          <div className="model-upload-grid">
+            <div className="field-group"><label htmlFor="model-upload-file">{t("tl.uploadFile")}</label><input id="model-upload-file" type="file" onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)} /></div>
+            <div className="field-group"><label htmlFor="model-upload-name">{t("tl.uploadName")}</label><input id="model-upload-name" value={uploadName} onChange={(event) => setUploadName(event.target.value)} placeholder="external_model" /></div>
+            <div className="field-group"><label htmlFor="model-upload-source">{t("tl.uploadSource")}</label><select id="model-upload-source" value={uploadSource} onChange={(event) => setUploadSource(event.target.value as typeof uploadSource)}><option value="transfer_learning">Transfer Learning</option><option value="reinforcement_learning">Reinforcement Learning</option></select></div>
+            <div className="field-group"><label htmlFor="model-upload-type">{t("tl.uploadType")}</label><select id="model-upload-type" value={uploadType} onChange={(event) => setUploadType(event.target.value as typeof uploadType)}><option value="reinvent">Reinvent</option><option value="mol2mol">Mol2Mol</option></select></div>
+          </div>
+          <button className="button quiet" type="button" disabled={!uploadFile || !uploadName.trim() || uploadBusy} onClick={() => void handleUpload()}>{uploadBusy ? t("tl.uploading") : t("tl.upload")}</button>
+        </div>
       </div>
     </div>
   );

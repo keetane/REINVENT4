@@ -58,6 +58,27 @@ def _runtime_versions(python: str) -> dict[str, str | None]:
     return result
 
 
+@lru_cache(maxsize=4)
+def _runtime_devices(python: str) -> dict[str, bool]:
+    query = (
+        "import torch; "
+        "print('cuda=' + str(int(torch.cuda.is_available()))); "
+        "print('mps=' + str(int(hasattr(torch.backends, 'mps') and torch.backends.mps.is_available())))"
+    )
+    try:
+        completed = subprocess.run(
+            [python, "-c", query],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        values = dict(line.split("=", 1) for line in completed.stdout.splitlines() if "=" in line)
+        return {key: values.get(key) == "1" for key in ("cuda", "mps")}
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {"cuda": False, "mps": False}
+
+
 def _model_response(repository: QsarModelRepository, model: QsarModelRecord) -> QsarModelResponse:
     return QsarModelResponse(
         id=model.id,
@@ -80,6 +101,7 @@ def _model_response(repository: QsarModelRepository, model: QsarModelRecord) -> 
 def capabilities(request: Request) -> QsarCapabilitiesResponse:
     settings = request.app.state.settings
     versions = _runtime_versions(str(settings.reinvent_runtime_python))
+    devices = _runtime_devices(str(settings.reinvent_runtime_python))
     chemprop_versions = _runtime_versions(str(settings.chemprop_runtime_python)) if settings.chemprop_runtime_python and settings.chemprop_runtime_python.is_file() else {}
     qsartuna_versions = _runtime_versions(str(settings.qsartuna_runtime_python)) if settings.qsartuna_runtime_python and settings.qsartuna_runtime_python.is_file() else {}
     sklearn_version = versions.get("scikit-learn")
@@ -120,7 +142,11 @@ def capabilities(request: Request) -> QsarCapabilitiesResponse:
     ]
     return QsarCapabilitiesResponse(
         algorithms=algorithms,
-        devices=[QsarCapability(key="cpu", label="CPU", available=True, reason="scikit-learnモデルはCPUで学習します。")],
+        devices=[
+            QsarCapability(key="cpu", label="CPU", available=True, reason="すべてのQSARアルゴリズムで利用できます。"),
+            QsarCapability(key="cuda", label="CUDA", available=devices["cuda"], reason="Chemprop v2、LightGBM、XGBoost、CatBoostで利用できます。" if devices["cuda"] else "CUDA対応GPUが検出されませんでした。"),
+            QsarCapability(key="mps", label="MPS", available=devices["mps"], reason="MPSはChemprop v2でのみ利用できます。" if devices["mps"] else "MPS対応PyTorch環境が検出されませんでした。"),
+        ],
     )
 
 

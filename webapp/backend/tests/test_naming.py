@@ -43,10 +43,13 @@ def test_result_filename_uses_configured_timezone_and_optional_collision_suffix(
         timezone_name="Asia/Tokyo",
         job_id=job_id,
     ) == "202610161430_kinase_12345678.csv"
+    assert result_filename(
+        comment_slug="comment", created_at=created, timezone_name="Asia/Tokyo",
+        tab_type="MolGen", model_type="Mol2MolHigh"
+    ) == "20261016_MolGen_Mol2MolHigh_comment.csv"
 
 
 def test_confined_path_rejects_escape(tmp_path):
     assert confined_path(tmp_path, "jobs/one") == tmp_path / "jobs" / "one"
     with pytest.raises(ValueError):
         confined_path(tmp_path, "../outside")
-

@@ -65,6 +65,6 @@ def test_real_libinvent_smoke(initialized_settings):
         rows = list(csv.DictReader(handle))
     assert len(rows) == 2
     assert "SMILES" in rows[0]
-    assert result.name.endswith("_libinvent_smoke.csv")
+    assert result.name.endswith("_MolGen_LibInvent_libinvent_smoke.csv")
     assert "Finished REINVENT" in log.read_text(encoding="utf-8")
     assert config.is_file()

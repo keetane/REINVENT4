@@ -64,7 +64,10 @@ def test_result_schema_filter_statistics_and_downloads(initialized_settings):
     assert "QED" in csv_download.text.splitlines()[0]
     assert "ParentSimilarity" in csv_download.text.splitlines()[0]
     assert sdf_download.text.count("$$$$") == 1
-    assert "202610161200_results.csv" in csv_download.headers["content-disposition"]
+    disposition = csv_download.headers["content-disposition"]
+    assert 'filename="' in disposition
+    assert "filename*=UTF-8''" in disposition
+    assert "_MolGen_Mol2MolHigh_results.csv" in disposition
 
 
 def test_results_require_completion_and_validate_query(initialized_settings):

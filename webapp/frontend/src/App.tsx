@@ -27,6 +27,7 @@ import { QsarPanel } from "./features/qsar/QsarPanel";
 import { RlPanel } from "./features/rl/RlPanel";
 import { TutorialPanel } from "./features/tutorial/TutorialPanel";
 import { TransferLearningPanel } from "./features/training/TransferLearningPanel";
+import { NumericInput } from "./components/NumericInput";
 
 const POLL_INTERVAL_MS = 3_000;
 const selectedJobStorageKey = "reinvent4.selectedJobId";
@@ -404,14 +405,13 @@ export function App() {
           <div className="conditions-grid">
             <div className="field-group">
               <label htmlFor="num-smiles">{t("generation.count")}</label>
-              <input
-                id="num-smiles"
-                type="number"
-                min={1}
-                max={10_000}
-                value={numSmiles}
-                onChange={(event) => setNumSmiles(Number(event.target.value))}
-              />
+                <NumericInput
+                  id="num-smiles"
+                  min={1}
+                  max={10_000}
+                  value={numSmiles}
+                  onValueChange={setNumSmiles}
+                />
             </div>
             <div className="field-group">
               <label htmlFor="device">{t("generation.device")}</label>
@@ -448,6 +448,7 @@ export function App() {
             models={models}
             onCreated={(job) => void handleTrainingCreated(job)}
             onDeleteModel={handleDeleteModel}
+            onModelsChanged={refreshModels}
           />
         </section>
       ) : activeView === "qsar" ? (
@@ -456,7 +457,7 @@ export function App() {
         </section>
       ) : activeView === "rl" ? (
         <section className="workspace-card">
-          <RlPanel models={models} onCreated={(job) => void handleTrainingCreated(job)} />
+          <RlPanel models={models} onCreated={(job) => void handleTrainingCreated(job)} onDeleteModel={handleDeleteModel} />
         </section>
       ) : activeView === "jobs" ? (
         <section className="workspace-card jobs-card">

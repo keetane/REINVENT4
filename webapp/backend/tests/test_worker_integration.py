@@ -47,7 +47,7 @@ def test_worker_completes_after_api_client_disconnect(settings):
     result = confined_path(settings.repository_root, job.result_csv_path)
     with result.open(newline="", encoding="utf-8") as handle:
         assert len(list(csv.DictReader(handle))) == 3
-    assert result.name.endswith("_disconnect.csv")
+    assert result.name.endswith("_MolGen_Mol2MolHigh_disconnect.csv")
 
 
 def test_api_restart_does_not_interrupt_independent_worker(settings):

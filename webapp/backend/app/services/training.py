@@ -22,6 +22,7 @@ from app.services.smiles_standardization import (
     standardization_metadata,
     standardize_smiles,
 )
+from app.services.naming import next_artifact_filename
 from app.services.workspaces import relative_to_repository
 
 
@@ -154,16 +155,11 @@ def inspect_training_data(
     )
 
 
-def _next_model_name(settings: Settings, comment: str) -> str:
-    date = datetime.now(ZoneInfo(settings.app_timezone)).strftime("%Y%m%d")
-    base = f"{date}_{comment}"
-    candidate = f"{base}.model"
-    serial = 2
-    existing = {path.name for path in settings.model_store_dir.glob(f"{base}*.model")}
-    while candidate in existing:
-        candidate = f"{base}_{serial}.model"
-        serial += 1
-    return candidate
+def _next_model_name(settings: Settings, base_model_key: str, comment: str) -> str:
+    return next_artifact_filename(
+        settings.model_store_dir, tab_type="TL", model_key=base_model_key,
+        comment=comment, date=datetime.now(ZoneInfo(settings.app_timezone)), extension=".model"
+    )
 
 
 def create_training_job(
@@ -184,7 +180,10 @@ def create_training_job(
     validation_smiles = shuffled[train_count:]
 
     settings.model_store_dir.mkdir(parents=True, exist_ok=True)
-    model_name = _next_model_name(settings, request.comment)
+    base_model_key = (
+        "reinvent" if request.base_model == "reinvent" else "mol2mol_scaffold_generic"
+    )
+    model_name = _next_model_name(settings, base_model_key, request.comment)
     output_model = settings.model_store_dir / model_name
     output_model.touch(exist_ok=False)
     model_id = uuid4()
@@ -231,9 +230,6 @@ def create_training_job(
             for row, reason in rejected_rows
         )
 
-    base_model_key = (
-        "reinvent" if request.base_model == "reinvent" else "mol2mol_scaffold_generic"
-    )
     conditions = {
         "base_model": request.base_model,
         "base_model_key": base_model_key,

@@ -8,9 +8,10 @@ from fastapi.testclient import TestClient
 
 from app.db.jobs import JobRepository
 from app.db.qsar_models import QsarModelRepository
+from app.errors import AppError
 from app.main import create_app
 from app.schemas.qsar import QsarDataRequest
-from app.services.qsar import process_qsar_data
+from app.services.qsar import process_qsar_data, validate_qsar_device
 from worker.engine import Worker
 
 
@@ -138,3 +139,11 @@ def test_unavailable_qsar_algorithms_are_rejected(settings):
             json={**payload(duplicate_strategy="keep_first"), "algorithm": "chemprop_v2", "comment": "chemprop"},
         )
     assert response.status_code == 422
+
+
+def test_qsar_gpu_device_is_limited_to_native_gpu_algorithms():
+    validate_qsar_device("cuda", ["lightgbm", "xgboost", "catboost"])
+    with pytest.raises(AppError, match="CUDA"):
+        validate_qsar_device("cuda", ["mlp"])
+    with pytest.raises(AppError, match="MPS"):
+        validate_qsar_device("mps", ["random_forest"])

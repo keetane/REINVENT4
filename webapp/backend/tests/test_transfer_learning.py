@@ -88,7 +88,7 @@ def test_training_job_completes_and_registers_persistent_model(settings):
     assert completed.status.value == "completed"
     models = ModelRepository(settings).list()
     assert len(models) == 1
-    assert models[0].name.endswith("_kinase_A.model")
+    assert models[0].name.endswith("_TL_Reinvent_kinase_A.model")
     assert (settings.repository_root / models[0].file_path).read_bytes() == b"fake trained model"
     assert (settings.repository_root / models[0].config_path).is_file()
     assert (settings.repository_root / models[0].log_path).is_file()

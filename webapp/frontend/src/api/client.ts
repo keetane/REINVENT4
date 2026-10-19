@@ -308,6 +308,32 @@ export function deleteModel(modelId: string): Promise<{ id: string; deleted: boo
   });
 }
 
+export function modelArtifactUrl(modelId: string, kind: "model"): string {
+  return `/api/models/${encodeURIComponent(modelId)}/artifacts/${kind}`;
+}
+
+export function uploadModel(file: File, metadata: {
+  name: string;
+  modelType: "reinvent" | "mol2mol";
+  baseModelKey: string;
+  source: "transfer_learning" | "reinforcement_learning";
+}): Promise<ModelInfo> {
+  const parameters = new URLSearchParams({
+    name: metadata.name,
+    model_type: metadata.modelType,
+    base_model_key: metadata.baseModelKey,
+    source: metadata.source
+  });
+  return request<ModelInfo>(`/api/models/upload?${parameters.toString()}`, {
+    method: "POST",
+    body: file,
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-Model-Filename": file.name
+    }
+  });
+}
+
 export function inspectTrainingData(payload: {
   file_name: string;
   content: string;

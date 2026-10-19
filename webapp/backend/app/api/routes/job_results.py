@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 import math
+from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
 
@@ -18,7 +20,7 @@ from app.schemas.results import (
     ResultSchemaResponse,
     StatisticsResponse,
 )
-from app.services.naming import confined_path
+from app.services.naming import confined_path, model_type_label, result_filename, slugify_comment
 from app.services.result_query import (
     ResultDataset,
     ResultFilters,
@@ -252,6 +254,33 @@ def _chunks(value: str, size: int = 64 * 1024) -> Iterator[str]:
         yield value[start : start + size]
 
 
+def _download_filename(request: Request, job: JobRecord) -> str:
+    """Build the current result name even for jobs created before the naming update."""
+    try:
+        created_at = datetime.fromisoformat(job.created_at)
+        model_key = str(job.run_conditions.get("model_key", "reinvent"))
+        return result_filename(
+            comment_slug=job.comment_slug,
+            created_at=created_at,
+            timezone_name=request.app.state.settings.app_timezone,
+            tab_type="MolGen",
+            model_type=model_type_label(model_key),
+        )
+    except (TypeError, ValueError, KeyError):
+        return job.result_csv_path.rsplit("/", 1)[-1]
+
+
+def _content_disposition(filename: str) -> str:
+    """Return a browser-compatible attachment name with a UTF-8 fallback."""
+    path = Path(filename)
+    ascii_stem = slugify_comment(path.stem, ascii_only=True, max_length=180)
+    ascii_filename = f"{ascii_stem}{path.suffix}"
+    return (
+        f'attachment; filename="{ascii_filename}"; '
+        f"filename*=UTF-8''{quote(filename)}"
+    )
+
+
 @router.get("/download.csv")
 def download_csv(
     request: Request,
@@ -275,11 +304,11 @@ def download_csv(
     filters = _route_filters(locals())
     rows = _apply(dataset, filters)
     content = export_csv(dataset.columns, rows, (item.name for item in dataset.descriptors))
-    filename = job.result_csv_path.rsplit("/", 1)[-1]
+    filename = _download_filename(request, job)
     return StreamingResponse(
         _chunks(content),
         media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={"Content-Disposition": _content_disposition(filename)},
     )
 
 
@@ -306,9 +335,9 @@ def download_sdf(
     filters = _route_filters(locals())
     rows = _apply(dataset, filters)
     content = export_sdf(rows)
-    filename = job.result_csv_path.rsplit("/", 1)[-1].removesuffix(".csv") + ".sdf"
+    filename = _download_filename(request, job).removesuffix(".csv") + ".sdf"
     return StreamingResponse(
         _chunks(content),
         media_type="chemical/x-mdl-sdfile",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+        headers={"Content-Disposition": _content_disposition(filename)},
     )

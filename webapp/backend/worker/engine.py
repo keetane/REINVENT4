@@ -25,7 +25,7 @@ from app.reinvent_adapter import (
     build_rl_command,
     build_transfer_learning_command,
 )
-from app.services.naming import confined_path, result_filename
+from app.services.naming import confined_path, model_type_label, result_filename
 from app.services.results import ResultValidationError, validate_and_finalize_csv
 from app.services.workspaces import relative_to_repository
 from app.services.smiles_standardization import standardize_smiles
@@ -358,6 +358,8 @@ class Worker:
                 comment_slug=job.comment_slug,
                 created_at=created_at,
                 timezone_name=self.settings.app_timezone,
+                tab_type="MolGen",
+                model_type=model_type_label(str(job.run_conditions.get("model_key", "reinvent"))),
             )
             final_path = job_dir / "output" / filename
             if command.raw_output is None:
