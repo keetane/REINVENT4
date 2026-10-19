@@ -8,6 +8,7 @@ import "ketcher-react/dist/index.css";
 import { fromEditorStructure, toEditorStructure } from "./structureFormat";
 
 const structureService = new StandaloneStructServiceProvider();
+const staticResourcesUrl = new URL(".", document.baseURI).pathname.replace(/\/$/, "");
 
 interface Props {
   value: string;
@@ -75,7 +76,7 @@ export default function KetcherEditor({
 
   return (
     <Editor
-      staticResourcesUrl="/"
+      staticResourcesUrl={staticResourcesUrl}
       structServiceProvider={structureService}
       onInit={handleInit}
       errorHandler={() => onError(t("parent.editorError"))}

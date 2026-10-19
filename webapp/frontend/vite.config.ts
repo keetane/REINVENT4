@@ -12,6 +12,13 @@ export default defineConfig({
     },
     dedupe: ["react", "react-dom", "@emotion/react", "@emotion/styled"]
   },
+  build: {
+    commonjsOptions: {
+      // ketcher-core 3.18 ships an ESM bundle containing require("raphael").
+      // Convert CommonJS calls inside otherwise-ESM dependencies as well.
+      transformMixedEsModules: true
+    }
+  },
   server: {
     host: "127.0.0.1",
     port: 5173,
