@@ -136,15 +136,16 @@ describe("App", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: /00 Tutorial/ }));
-    expect(screen.getByRole("heading", { name: "分子生成をはじめる" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Model")).toHaveValue("reinvent");
-    expect(screen.getByText(/Parent SMILESを入力せずに利用できます/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Molecular Generatorの使い方" })).toBeInTheDocument();
+    expect(screen.getByLabelText("モデルの由来")).toHaveValue("standard");
+    expect(screen.getByLabelText("Standardモデル")).toHaveValue("reinvent");
+    expect(screen.getByText(/ReinventはParent SMILESを入力せずに使用します/)).toBeInTheDocument();
     expect(screen.getByText("RDKit")).toBeInTheDocument();
     expect(screen.getByText(/OpenEye ROCSは使用していません/)).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("Model"), "linkinvent");
+    await user.selectOptions(screen.getByLabelText("Standardモデル"), "linkinvent");
     expect(screen.getByText("Oc1cncc(*)c1|*c1ccoc1", { exact: true })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "このモデルを使う" }));
+    await user.click(screen.getByRole("button", { name: "分子生成で試す" }));
     expect(screen.getByLabelText("Model")).toHaveValue("standard:linkinvent");
     expect(screen.getByLabelText("LinkInvent warheads")).toHaveValue("Oc1cncc(*)c1|*c1ccoc1");
   });

@@ -1,18 +1,114 @@
-REINVENTer 4
-==========
-REINVENTer 4 is an integrated program based on REINVENT4 by AZ. Many thanks for all contributers!!  
-After git clone and install the REINVENT4 from this folk, install some additional libraries by following command,
+# Molecular Generator — REINVENT4 Web Application
+
+This repository contains a local web application built on [REINVENT4](https://github.com/MolecularAI/REINVENT4). It provides one workspace for molecule generation, Transfer Learning, QSAR modeling, Reinforcement Learning, job history, and result analysis.
+
+The application is called **Molecular Generator**. It is a local-only service: the browser UI runs on `http://127.0.0.1:5173/`, the FastAPI backend runs on `http://127.0.0.1:8000/`, and jobs continue in an independent worker after submission.
+
+## What Molecular Generator provides
+
+- **Molecule Generation**: sample from Standard Prior models or from registered Transfer Learning / Reinforcement Learning models. Reinvent does not require a Parent; Mol2Mol requires one, while LibInvent and LinkInvent use attachment-point SMILES.
+- **Transfer Learning**: validate and standardize SMILES data, split Training and Validation data, and create a specialized Reinvent or Mol2Mol generator.
+- **QSAR**: train a single model or compare algorithms such as Chemprop, QSARtuna, MLP, Random Forest, LightGBM, XGBoost, and CatBoost. Registered models can predict a drawn structure and can be selected as an RL Scoring Function.
+- **Reinforcement Learning**: update an Agent toward a combined Scoring Function built from QSAR predictions, molecular properties, and other constraints.
+- **Jobs & Results**: inspect progress, logs, training curves, generated structures, properties, model-comparison scores, and downloadable artifacts.
+
+The Tutorial tab in the application explains the workflow in the same order as the tabs: environment setup, molecule generation, Transfer Learning, QSAR, Reinforcement Learning, and open-source components.
+
+## Installation and setup
+
+### Requirements
+
+- Python 3.10 or newer
+- Node.js and npm (Node.js 24 or newer is recommended for the frontend)
+- Git
+- On Ubuntu with CUDA, a compatible NVIDIA driver and CUDA runtime
+
+The setup scripts create isolated environments and install the required packages:
+
+| Environment | Contents |
+| --- | --- |
+| `.runtimes/reinvent` | REINVENT4, PyTorch, RDKit, scikit-learn, LightGBM, XGBoost, CatBoost |
+| `webapp/backend/.venv` | FastAPI backend and web application dependencies |
+| `.runtimes/chemprop-v2` | Chemprop v2.3.1 |
+| `.runtimes/qsartuna` | QSARtuna and its pinned dependencies |
+| `webapp/frontend/node_modules` | Frontend dependencies from `package-lock.json` |
+
+### macOS Apple Silicon
+
 ```bash
-conda install -c conda-forge rdkit pubchempy streamlit requests chembl_webresource_client networkx mols2grid scikit-learn seaborn plotly
+git clone https://github.com/keetane/REINVENT4.git
+cd REINVENT4
+bash scripts/setup_macos.sh
+python3 scripts/check_environment.py
+bash scripts/start_webapp.sh
 ```
 
-The program by written in python, so you can simply run the command as follows in `REINVENT4` directory to open the GUI.
-```bash:reinventer.py
-streamlit run reinventer.py
+### Ubuntu CPU
+
+```bash
+git clone https://github.com/keetane/REINVENT4.git
+cd REINVENT4
+bash scripts/setup_ubuntu.sh
+python3 scripts/check_environment.py
+bash scripts/start_webapp.sh
 ```
 
+### Ubuntu NVIDIA CUDA
 
-should check original README of REINVENT4 as follows,  
+Set the PyTorch processor type before running the Ubuntu setup. Use the CUDA version appropriate for the installed driver, for example:
+
+```bash
+REINVENT_PROCESSOR_TYPE=cu124 bash scripts/setup_ubuntu.sh
+```
+
+The setup scripts use `-d none` for the REINVENT installation. OpenEye ROCS and other license-dependent packages are therefore **not installed or used**. Structure and similarity calculations use open-source components such as RDKit.
+
+The scripts do not install Python, Node.js, npm, system compilers, or GPU drivers. Those prerequisites must already be available on the machine.
+
+### Verify the installation
+
+```bash
+python3 scripts/check_environment.py
+curl http://127.0.0.1:8000/api/health
+```
+
+The launcher starts the API, worker, and frontend. To stop them, use the process controls provided by the launcher or stop the PIDs recorded in `webapp/.run/`.
+
+## Model and data workflow
+
+1. Prepare a generation model, TL model, or QSAR model.
+2. Select the model and device in the relevant tab.
+3. Start the asynchronous job.
+4. Inspect progress and logs in **Jobs & History**.
+5. Inspect structures, properties, distributions, correlations, and model scores in **Results**.
+
+QSAR files can be uploaded using names such as `yyyymmdd_QSAR_RandomForest_comment.joblib`. Generation model uploads use `yyyymmdd_TL_Mol2MolHigh_comment.model` or `yyyymmdd_RL_Reinvent_comment.chkpt`. The filename supplies the model type, purpose, algorithm, and display comment automatically; duplicate names receive a serial suffix.
+
+Generated CSV downloads use the form `yyyymmdd_MolGen_<ModelType>_<comment>.csv`, for example `20261019_MolGen_Mol2MolHigh_aspirin.csv`.
+
+## Storage locations
+
+By default, artifacts are stored under the repository root:
+
+```text
+models/                  TL/RL generation models
+models/qsar/             QSAR model files
+jobs/<job-id>/input/     uploaded and standardized inputs
+jobs/<job-id>/output/    generated CSV/SDF, predictions, evaluations
+jobs/<job-id>/logs/      worker and runtime logs
+jobs/<job-id>/config/    job configuration snapshots
+jobs.db                  persistent job and model registry
+```
+
+The locations can be overridden with `REINVENT_WEB_REPOSITORY_ROOT`, `REINVENT_WEB_JOBS_DIR`, `REINVENT_WEB_MODELS_DIR`, and `REINVENT_WEB_DATABASE_PATH`.
+
+## Open-source software
+
+The application uses REINVENT4, RDKit, PyTorch, scikit-learn, Chemprop, QSARtuna, LightGBM, XGBoost, CatBoost, FastAPI, and related open-source packages. See the Tutorial tab for versions, licenses, source links, and documentation links. OpenEye ROCS is not used.
+
+## Upstream REINVENT4 documentation
+
+The sections below preserve the upstream REINVENT4 background, command-line usage, prior-model references, scoring-plugin notes, and development information. They describe the underlying REINVENT4 project; for this repository's web application, use the setup and launch commands above.
 
 REINVENT 4
 ==========
@@ -58,24 +154,18 @@ For most design tasks a memory of about 8 GiB for both CPU main memory and
 GPU memory is sufficient.
 
 
-Installation
-------------
+Upstream REINVENT4 CLI installation (optional)
+----------------------------------------------
 
-1. Clone this Git repository.
-1. Create a Python environment and install a compatible version of Python, for example with [Conda](https://conda.io/projects/conda/en/latest/index.html) (other virtual environments like Docker, pyenv, or the system package manager work too).
-    ```shell
-    conda create --name reinvent4 python=3.10
-    conda activate reinvent4
-    ```
-1. Change directory to the repository and install all dependencies.  You will need to set the right processor type, see [PyTorch versions](https://pytorch.org/get-started/locally/). Linux supports CUDA (e.g. "cu124"), ROCm (e.g. "rocm6.2.4")  and CPU. Windows supports CUDA and CPU.  MacOSX only supports CPU (use "mac" as processor type!). Optionally, you can select dependencies "openeye" (for ROCS; you need to obtain your own license), "isim" for similarity tracking in TensorBoard or "none" to skip all.  The default is installation of "all" dependencies.  See the help text from the install script for details.
-    ```shell
-    python install.py --help
-    python install.py cu124  # or rocm6.2.4, cpu, mac, etc.
-    ```
-1. Test the tool. The installer has added a script `reinvent` to your PATH.
-    ```shell
-    reinvent --help
-    ```
+The web application setup above is the supported installation path for this repository. If you also need to run the underlying REINVENT4 command-line tool directly, follow the upstream installation guidance and select the PyTorch processor type appropriate for the machine:
+
+```shell
+python install.py --help
+python install.py cu124  # or rocm6.2.4, cpu, mac, etc.
+reinvent --help
+```
+
+The web application itself uses isolated runtimes created by `scripts/setup_macos.sh` or `scripts/setup_ubuntu.sh`. Do not install OpenEye ROCS for the web application; it is not used by this project.
 
 Basic Usage
 -----------

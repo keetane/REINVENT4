@@ -61,6 +61,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .workflow-flow b { color: var(--accent); }
 .installation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem; }
 .installation-grid article { min-width: 0; }
+.installation-command-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.installation-command-heading h4 { margin: 0; }
+.installation-copy-button { padding: 6px 10px; font-size: .72rem; }
 .installation-grid pre { min-height: 150px; padding: 0.9rem; overflow: auto; border: 1px solid var(--border); border-radius: 0.6rem; background: #080c13; color: #d7e6ff; white-space: pre-wrap; }
 
 .brand { display: flex; align-items: center; gap: 16px; }
@@ -378,14 +381,26 @@ footer { display: flex; justify-content: space-between; padding: 18px 4px; color
 .example-label { color: var(--green); font: .62rem ui-monospace, "SFMono-Regular", monospace; letter-spacing: .12em; }
 .tutorial-note { margin: 13px 0 0; color: var(--muted); font-size: .8rem; }
 .tutorial-note code { color: var(--lime); }
-.tutorial-model-picker { max-width: 460px; margin-bottom: 16px; }
+.tutorial-model-choice { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); align-items: stretch; gap: 12px; margin-bottom: 16px; }
+.tutorial-model-picker { max-width: 460px; margin: 0; }
 .tutorial-model-card { overflow: hidden; border: 1px solid #355247; border-radius: 14px; background: #0e1c15; }
 .tutorial-model-copy { display: grid; gap: 10px; padding: 20px; }
 .tutorial-model-copy h4 { margin: 0; font-size: 1.05rem; }
-.tutorial-model-copy p { display: grid; grid-template-columns: 54px 1fr; gap: 8px; margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.55; }
+.tutorial-model-copy p { margin: 0; color: var(--muted); font-size: .82rem; line-height: 1.65; }
 .tutorial-model-copy p strong { color: var(--ink); }
 .tutorial-model-card .tutorial-example { border: 0; border-top: 1px solid #355247; border-radius: 0; }
 .tutorial-no-parent { color: var(--muted); font-size: .82rem; }
+.tutorial-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+.tutorial-info-grid article { display: grid; align-content: start; gap: 8px; min-width: 0; padding: 16px; border-radius: 12px; background: #13241b; }
+.tutorial-info-grid strong { line-height: 1.35; }
+.tutorial-info-grid span { color: var(--muted); font-size: .78rem; line-height: 1.65; }
+.tutorial-subsection { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.tutorial-subsection > h4, .tutorial-workflow > h4 { margin: 0 0 12px; color: var(--text); font-size: .9rem; }
+.tutorial-workflow { margin-bottom: 18px; }
+.tutorial-workflow .workflow-flow { margin-top: 0; }
+.tutorial-sample-block { margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.tutorial-sample-heading { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 300px); align-items: center; gap: 12px; margin-bottom: 10px; }
+.tutorial-sample-heading select { width: 100%; }
 .tutorial-training-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: training-step; }
 .tutorial-training-steps li { display: grid; align-content: start; gap: 8px; padding: 16px; border-radius: 12px; background: #13241b; }
 .tutorial-training-steps li::before { counter-increment: training-step; content: counter(training-step, decimal-leading-zero); color: var(--green); font: .68rem ui-monospace, "SFMono-Regular", monospace; }
@@ -532,6 +547,7 @@ footer { display: flex; justify-content: space-between; padding: 18px 4px; color
   .histogram-list { grid-template-columns: 1fr; }
   .training-summary { grid-template-columns: 1fr; }
   .model-row { align-items: stretch; flex-direction: column; }
+  .tutorial-model-choice, .tutorial-sample-heading { grid-template-columns: 1fr; }
   .model-upload-row { align-items: stretch; flex-direction: column; }
   .model-upload-row .button { width: 100%; }
   .model-upload-grid { grid-template-columns: 1fr; }

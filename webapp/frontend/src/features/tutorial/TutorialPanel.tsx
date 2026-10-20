@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { tutorialContent } from "../../i18n/tutorialContent";
 
-interface Props { onUseSample: (modelKey: string, smiles: string) => void; onOpenTraining: () => void; }
+interface Props {
+  onUseSample: (modelKey: string, smiles: string) => void;
+  onOpenTraining: () => void;
+}
 
 const OSS = [
   ["REINVENT4", "4.5.11", "Apache-2.0", "https://github.com/MolecularAI/REINVENT4", "https://github.com/MolecularAI/REINVENT4/tree/main/docs"],
@@ -17,28 +20,120 @@ const OSS = [
   ["PyTorch", "2.6.0 / 2.14.1", "BSD-3-Clause", "https://github.com/pytorch/pytorch", "https://pytorch.org/docs/stable/"],
 ];
 
+type TutorialItem = { title: string; body: string };
+
 export function TutorialPanel({ onUseSample, onOpenTraining }: Props) {
   const { i18n } = useTranslation();
   const language = i18n.language.startsWith("en") ? "en" : "ja";
   const content = tutorialContent[language];
-  const [selected, setSelected] = useState("reinvent");
-  const generator = content.generators.find((item) => item.key === selected) ?? content.generators[0];
+  const [selectedSource, setSelectedSource] = useState<"standard" | "transfer_learning" | "reinforcement_learning">("standard");
+  const [selectedGenerator, setSelectedGenerator] = useState("reinvent");
+  const modelChoice = content.modelChoices.find((item) => item.key === selectedSource) ?? content.modelChoices[0];
+  const generator = content.generators.find((item) => item.key === selectedGenerator) ?? content.generators[0];
   const labels = content.labels;
+
   return <div className="tutorial-panel">
-    <div className="section-heading tutorial-hero"><div><p className="section-kicker">00 · TUTORIAL</p><h2>{content.title}</h2><p>{content.intro}</p></div><span className="tutorial-chip">LOCAL WORKSPACE</span></div>
-    <section className="tutorial-section"><div className="tutorial-section-title"><span>01</span><div><h3>{content.chooseTitle}</h3></div></div>
-      <div className="decision-tree">{content.decisionTree.map((item) => <span key={item}>{item}</span>)}</div>
-      <div className="tutorial-model-picker field-group"><label htmlFor="tutorial-model">Model</label><select id="tutorial-model" value={selected} onChange={(event) => setSelected(event.target.value)}>{content.generators.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></div>
-      <article className="tutorial-model-card"><div className="tutorial-model-copy"><span className="example-label">{generator.name}</span><p><strong>{labels.purpose}</strong>{generator.purpose}</p><p><strong>{labels.research}</strong>{generator.research}</p><p><strong>{labels.input}</strong>{generator.input}</p><p><strong>{labels.parent}</strong>{generator.parent}</p><p><strong>{labels.output}</strong>{generator.output}</p></div><div className="tutorial-example">{generator.key === "reinvent" ? <span className="tutorial-no-parent">{content.noParent}</span> : <code>{generator.example}</code>}<button className="button secondary" type="button" onClick={() => onUseSample(generator.key, generator.key === "reinvent" ? "" : generator.example)}>{labels.use}</button></div></article>
+    <div className="section-heading tutorial-hero">
+      <div><p className="section-kicker">TUTORIAL</p><h2>{content.title}</h2><p>{content.intro}</p></div>
+      <span className="tutorial-chip">LOCAL WORKSPACE</span>
+    </div>
+
+    <section className="tutorial-section installation-section">
+      <SectionTitle number="00" title={content.environmentTitle} description={content.environmentIntro} />
+      <p className="tutorial-note">{content.installation.title}</p>
+      <div className="installation-grid">
+        <CommandList title={labels.mac} commands={content.installation.mac} copyLabel={labels.copy} copiedLabel={labels.copied} />
+        <CommandList title={labels.ubuntu} commands={content.installation.ubuntu} copyLabel={labels.copy} copiedLabel={labels.copied} />
+        <CommandList title={labels.verify} commands={content.installation.verify} copyLabel={labels.copy} copiedLabel={labels.copied} />
+      </div>
     </section>
-    <section className="tutorial-section"><div className="tutorial-section-title"><span>02</span><div><h3>Transfer Learning</h3><p>{content.step2Title}</p></div></div><ol className="tutorial-training-steps"><li><strong>Sampling</strong><span>{content.sampling}</span></li><li><strong>Transfer Learning</strong><span>{content.tl}</span></li><li><strong>Reinforcement Learning</strong><span>{content.rl}</span></li><li><strong>TL → RL</strong><span>{content.tlrl}</span></li></ol><button className="button secondary" type="button" onClick={onOpenTraining}>{content.openTraining}</button></section>
-    <section className="tutorial-section"><div className="tutorial-section-title"><span>03</span><div><h3>{content.qsarTitle}</h3><p>{content.qsar}</p></div></div><div className="workflow-flow" aria-label={content.workflowTitle}>{content.workflowSteps.map((item, index) => <div key={item}><span>{item}</span>{index < content.workflowSteps.length - 1 && <b>→</b>}</div>)}</div></section>
-    <section className="tutorial-section"><div className="tutorial-section-title"><span>04</span><div><h3>QSAR / Model Comparison / RL</h3></div></div><ol className="tutorial-training-steps">{content.modelingSteps.map((item) => <li key={item.title}><strong>{item.title}</strong><span>{item.body}</span></li>)}</ol></section>
-    <section className="tutorial-section oss-section"><div className="tutorial-section-title"><span>05</span><div><h3>{content.ossTitle}</h3></div></div><div className="qsar-preview"><table><thead><tr><th>OSS</th><th>Version</th><th>License</th><th>{labels.source}</th><th>{labels.docs}</th></tr></thead><tbody>{OSS.map((item) => <tr key={item[0]}><td>{item[0]}</td><td>{item[1]}</td><td>{item[2]}</td><td><a href={item[3]} target="_blank" rel="noreferrer">GitHub ↗</a></td><td><a href={item[4]} target="_blank" rel="noreferrer">Docs ↗</a></td></tr>)}</tbody></table></div><p className="oss-exclusion-note"><strong>{content.noRocs}</strong></p></section>
-    <section className="tutorial-section installation-section"><div className="tutorial-section-title"><span>06</span><div><h3>{content.installationTitle}</h3><p>{content.installationIntro}</p></div></div><p className="tutorial-note">{content.installation.title}</p><div className="installation-grid"><CommandList title={labels.mac} commands={content.installation.mac} /><CommandList title={labels.ubuntu} commands={content.installation.ubuntu} /><CommandList title={labels.verify} commands={content.installation.verify} /></div></section>
+
+    <section className="tutorial-section">
+      <SectionTitle number="01" title={content.generationTitle} description={content.generationIntro} />
+      <div className="tutorial-model-choice">
+        <div className="tutorial-model-picker field-group">
+          <label htmlFor="tutorial-model-source">{labels.modelSource}</label>
+          <select id="tutorial-model-source" value={selectedSource} onChange={(event) => setSelectedSource(event.target.value as typeof selectedSource)}>
+            {content.modelChoices.map((item) => <option key={item.key} value={item.key}>{item.title}</option>)}
+          </select>
+        </div>
+        <article className="tutorial-model-card">
+          <div className="tutorial-model-copy"><h4>{modelChoice.title}</h4><p>{modelChoice.body}</p></div>
+        </article>
+      </div>
+      <InfoGrid items={content.generationSteps} />
+      <div className="tutorial-sample-block">
+        <div className="tutorial-sample-heading">
+          <strong>{content.sampleTitle}</strong>
+          <select aria-label={labels.standardSample} value={selectedGenerator} onChange={(event) => setSelectedGenerator(event.target.value)}>
+            {content.generators.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}
+          </select>
+        </div>
+        <div className="tutorial-example">
+          {generator.example ? <code>{generator.example}</code> : <span className="tutorial-no-parent">{content.noParent}</span>}
+          <button className="button secondary" type="button" onClick={() => onUseSample(generator.key, generator.example)}>{labels.use}</button>
+        </div>
+      </div>
+    </section>
+
+    <section className="tutorial-section">
+      <SectionTitle number="02" title={content.transferTitle} description={content.transferIntro} />
+      <InfoGrid items={content.transferSteps} />
+      <Subsection title={content.transferResultsTitle}><InfoGrid items={content.transferResults} /></Subsection>
+      <Subsection title={content.transferParametersTitle}><InfoGrid items={content.transferParameters} /></Subsection>
+      <div className="tutorial-training-action"><p>{content.transferIntro}</p><button className="button secondary" type="button" onClick={onOpenTraining}>{content.openTraining}</button></div>
+    </section>
+
+    <section className="tutorial-section">
+      <SectionTitle number="03" title={content.qsarTitle} description={content.qsarIntro} />
+      <Workflow title={content.qsarWorkflowTitle} steps={content.qsarWorkflowSteps} />
+      <InfoGrid items={content.qsarUses} />
+      <Subsection title={content.qsarScoresTitle}><InfoGrid items={content.qsarScores} /></Subsection>
+    </section>
+
+    <section className="tutorial-section">
+      <SectionTitle number="04" title={content.rlTitle} description={content.rlIntro} />
+      <Workflow title={content.rlWorkflowTitle} steps={content.rlWorkflowSteps} />
+      <InfoGrid items={content.rlSteps} />
+    </section>
+
+    <section className="tutorial-section oss-section">
+      <SectionTitle number="05" title={content.ossTitle} />
+      <div className="qsar-preview"><table><thead><tr><th>OSS</th><th>Version</th><th>License</th><th>{labels.source}</th><th>{labels.docs}</th></tr></thead><tbody>{OSS.map((item) => <tr key={item[0]}><td>{item[0]}</td><td>{item[1]}</td><td>{item[2]}</td><td><a href={item[3]} target="_blank" rel="noreferrer">GitHub ↗</a></td><td><a href={item[4]} target="_blank" rel="noreferrer">Docs ↗</a></td></tr>)}</tbody></table></div>
+      <p className="oss-exclusion-note"><strong>{content.noRocs}</strong></p>
+    </section>
   </div>;
 }
 
-function CommandList({ title, commands }: { title: string; commands: string[] }) {
-  return <article><h4>{title}</h4><pre>{commands.join("\n")}</pre></article>;
+function SectionTitle({ number, title, description }: { number: string; title: string; description?: string }) {
+  return <div className="tutorial-section-title"><span>{number}</span><div><h3>{title}</h3>{description && <p>{description}</p>}</div></div>;
+}
+
+function InfoGrid({ items }: { items: TutorialItem[] }) {
+  return <div className="tutorial-info-grid">{items.map((item) => <article key={item.title}><strong>{item.title}</strong><span>{item.body}</span></article>)}</div>;
+}
+
+function Subsection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="tutorial-subsection"><h4>{title}</h4>{children}</section>;
+}
+
+function Workflow({ title, steps }: { title: string; steps: string[] }) {
+  return <div className="tutorial-workflow"><h4>{title}</h4><div className="workflow-flow" aria-label={title}>{steps.map((item, index) => <div key={item}><span>{item}</span>{index < steps.length - 1 && <b>→</b>}</div>)}</div></div>;
+}
+
+function CommandList({ title, commands, copyLabel, copiedLabel }: { title: string; commands: string[]; copyLabel: string; copiedLabel: string }) {
+  const [copied, setCopied] = useState(false);
+  const commandText = commands.join("\n");
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(commandText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return <article><div className="installation-command-heading"><h4>{title}</h4><button className="button quiet installation-copy-button" type="button" onClick={() => void copy()}>{copied ? copiedLabel : copyLabel}</button></div><pre>{commandText}</pre></article>;
 }
