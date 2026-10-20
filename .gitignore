@@ -27,6 +27,7 @@ mprofile_*.dat
 smina.py
 
 # REINVENT4 web application
+/data/
 /jobs.db
 /jobs.db-shm
 /jobs.db-wal
