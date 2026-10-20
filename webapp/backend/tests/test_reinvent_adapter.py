@@ -56,6 +56,40 @@ def test_adapter_generates_allowlisted_argv_and_toml(initialized_settings, tmp_p
     assert "touch /tmp/nope" not in toml
 
 
+def test_adapter_accepts_repository_model_store_path(initialized_settings, tmp_path):
+    settings = _adapter_settings(initialized_settings, tmp_path)
+    model = settings.model_store_dir / "20261020_TL_test.model"
+    model.parent.mkdir(parents=True, exist_ok=True)
+    model.write_bytes(b"model")
+    created = create_job(
+        settings,
+        JobCreateRequest(
+            parent_smiles="",
+            comment="custom model",
+            run_conditions={
+                "model_key": "reinvent",
+                "model_id": "standard:reinvent",
+                "num_smiles": 2,
+                "device": "cpu",
+            },
+        ),
+    )
+    created = replace(
+        created,
+        run_conditions={
+            **created.run_conditions,
+            "resolved_model_path": "models/20261020_TL_test.model",
+        },
+    )
+
+    command = build_reinvent_command(
+        settings, created, confined_path(settings.repository_root, created.job_dir)
+    )
+
+    assert command.model_path == "models/20261020_TL_test.model"
+    assert str(model) in command.config_path.read_text(encoding="utf-8")
+
+
 def test_adapter_rejects_client_selected_model_path(initialized_settings, tmp_path):
     settings = _adapter_settings(initialized_settings, tmp_path)
     with pytest.raises(AppError, match="利用できません"):

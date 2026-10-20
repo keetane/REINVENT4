@@ -81,8 +81,13 @@ def build_reinvent_command(
     if not (source_root / "reinvent" / "__init__.py").is_file():
         raise AdapterConfigurationError("configured REINVENT source root is invalid")
     resolved_model_path = str(conditions.get("resolved_model_path", model_spec.relative_path))
-    model_path = (source_root / resolved_model_path).resolve()
-    if not model_path.is_relative_to(source_root) or not model_path.is_file():
+    repository_model_path = (settings.repository_root / resolved_model_path).resolve()
+    source_model_path = (source_root / resolved_model_path).resolve()
+    if repository_model_path.is_relative_to(settings.model_store_dir) and repository_model_path.is_file():
+        model_path = repository_model_path
+    elif source_model_path.is_relative_to(source_root) and source_model_path.is_file():
+        model_path = source_model_path
+    else:
         raise AdapterConfigurationError("configured REINVENT model is missing")
 
     num_smiles = _bounded_int(
@@ -154,7 +159,11 @@ def build_reinvent_command(
         public_log=public_log,
         environment=environment,
         config_path=toml_path,
-        model_path=str(model_path.relative_to(source_root)),
+        # Keep the configured relative path in job metadata.  Custom TL/RL
+        # models live under the repository model store, not under the
+        # read-only REINVENT source tree, so ``relative_to(source_root)``
+        # raises ValueError for those valid paths.
+        model_path=resolved_model_path,
     )
 
 
