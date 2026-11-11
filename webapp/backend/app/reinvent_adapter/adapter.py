@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import Settings
+from app.constants import MAX_GENERATION_SMILES
 from app.db.jobs import JobRecord
 from app.reinvent_adapter.models import MODEL_SPECS, MOL2MOL_FULL_MODEL_KEYS
 
@@ -78,7 +79,7 @@ def _build_mol2mol_full_command(
         conditions.get("num_smiles", 100),
         default=100,
         minimum=1,
-        maximum=100_000,
+        maximum=MAX_GENERATION_SMILES,
         name="num_smiles",
     )
     device = str(conditions.get("device", "cpu"))
@@ -210,7 +211,7 @@ def build_reinvent_command(
         conditions.get("num_smiles", 100),
         default=100,
         minimum=1,
-        maximum=100_000,
+        maximum=MAX_GENERATION_SMILES,
         name="num_smiles",
     )
     device = str(conditions.get("device", "cpu"))

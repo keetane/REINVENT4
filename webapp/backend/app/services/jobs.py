@@ -3,6 +3,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 from app.config import Settings
+from app.constants import MAX_GENERATION_SMILES
 from app.db.jobs import JobRecord, JobRepository
 from app.db.models import ModelRepository
 from app.errors import AppError
@@ -15,6 +16,34 @@ from app.services.workspaces import create_job_workspace, relative_to_repository
 
 def create_job(settings: Settings, request: JobCreateRequest) -> JobRecord:
     conditions = dict(request.run_conditions)
+    raw_num_smiles = conditions.get("num_smiles", 100)
+    if isinstance(raw_num_smiles, bool):
+        raise AppError(
+            status_code=422,
+            code="invalid_generation_count",
+            message="生成件数は1以上10,000以下の整数で指定してください。",
+        )
+    try:
+        num_smiles = int(raw_num_smiles)
+    except (TypeError, ValueError) as error:
+        raise AppError(
+            status_code=422,
+            code="invalid_generation_count",
+            message="生成件数は1以上10,000以下の整数で指定してください。",
+        ) from error
+    if isinstance(raw_num_smiles, float) and not raw_num_smiles.is_integer():
+        raise AppError(
+            status_code=422,
+            code="invalid_generation_count",
+            message="生成件数は1以上10,000以下の整数で指定してください。",
+        )
+    if num_smiles < 1 or num_smiles > MAX_GENERATION_SMILES:
+        raise AppError(
+            status_code=422,
+            code="generation_count_exceeded",
+            message=f"生成件数は最大{MAX_GENERATION_SMILES:,}件です。",
+        )
+    conditions["num_smiles"] = num_smiles
     requested_model_id = str(
         conditions.get("model_id") or f"standard:{conditions.get('model_key', 'mol2mol_high')}"
     )

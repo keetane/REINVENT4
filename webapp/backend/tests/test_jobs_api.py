@@ -46,3 +46,19 @@ def test_validation_and_not_found_errors_are_uniform(settings):
         assert missing.status_code == 404
         assert missing.json()["error"]["code"] == "job_not_found"
 
+
+def test_generation_count_is_limited_before_job_creation(settings):
+    with TestClient(create_app(settings)) as client:
+        accepted = client.post(
+            "/api/jobs",
+            json={"parent_smiles": "CCO", "run_conditions": {"num_smiles": 10_000}},
+        )
+        rejected = client.post(
+            "/api/jobs",
+            json={"parent_smiles": "CCO", "run_conditions": {"num_smiles": 10_001}},
+        )
+
+    assert accepted.status_code == 202
+    assert rejected.status_code == 422
+    assert rejected.json()["error"]["code"] == "generation_count_exceeded"
+

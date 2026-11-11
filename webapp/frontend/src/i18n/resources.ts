@@ -17,6 +17,7 @@ export const resources = {
     "generation.starting": "登録中…",
     "generation.comment": "コメント",
     "generation.count": "生成件数",
+    "generation.countHint": "1モデルあたり最大10,000件です。Mol2Mol Fullでは各モデルに適用されます。",
     "generation.device": "実行デバイス"
     ,"generation.parentTitle": "Parent 分子から探索を開始"
     ,"generation.priorTitle": "Priorから分子を生成"
@@ -390,6 +391,7 @@ export const resources = {
     "generation.starting": "Submitting…",
     "generation.comment": "Comment",
     "generation.count": "Number of molecules",
+    "generation.countHint": "Maximum 10,000 per model. For Mol2Mol Full, the limit applies to each model.",
     "generation.device": "Compute device"
     ,"generation.parentTitle": "Explore from a parent molecule"
     ,"generation.priorTitle": "Generate from the Prior"

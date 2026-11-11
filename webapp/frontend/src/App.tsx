@@ -30,6 +30,7 @@ import { TransferLearningPanel } from "./features/training/TransferLearningPanel
 import { NumericInput } from "./components/NumericInput";
 
 const POLL_INTERVAL_MS = 3_000;
+const MAX_GENERATION_SMILES = 10_000;
 const selectedJobStorageKey = "reinvent4.selectedJobId";
 type ComputeDevice = "cpu" | "cuda" | "mps";
 
@@ -408,10 +409,11 @@ export function App() {
                 <NumericInput
                   id="num-smiles"
                   min={1}
-                  max={10_000}
+                  max={MAX_GENERATION_SMILES}
                   value={numSmiles}
                   onValueChange={setNumSmiles}
                 />
+              <p className="field-hint">{t("generation.countHint")}</p>
             </div>
             <div className="field-group">
               <label htmlFor="device">{t("generation.device")}</label>
