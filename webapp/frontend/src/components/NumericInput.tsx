@@ -6,18 +6,37 @@ interface Props extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "va
 }
 
 /** Keeps the user's draft (including an empty value or trailing decimal) intact until blur. */
-export function NumericInput({ value, onValueChange, onBlur, onFocus, ...props }: Props) {
-  const [draft, setDraft] = useState(value == null ? "" : String(value));
+export function NumericInput({ value, onValueChange, onBlur, onFocus, min, max, ...props }: Props) {
+  const minimum = min == null ? null : Number(min);
+  const maximum = max == null ? null : Number(max);
+  const initialValue = value != null && maximum !== null && Number.isFinite(maximum)
+    ? Math.min(value, maximum)
+    : value;
+  const [draft, setDraft] = useState(initialValue == null ? "" : String(initialValue));
   const focused = useRef(false);
+
+  const clamp = (next: number) => {
+    const withMinimum = minimum !== null && Number.isFinite(minimum) ? Math.max(minimum, next) : next;
+    return maximum !== null && Number.isFinite(maximum) ? Math.min(maximum, withMinimum) : withMinimum;
+  };
 
   useEffect(() => {
     if (!focused.current) setDraft(value == null ? "" : String(value));
   }, [value]);
 
+  useEffect(() => {
+    if (value != null && maximum !== null && Number.isFinite(maximum) && value > maximum) {
+      setDraft(String(maximum));
+      onValueChange(maximum);
+    }
+  }, [maximum, onValueChange, value]);
+
   return (
     <input
       {...props}
       type="number"
+      min={min}
+      max={max}
       value={draft}
       onFocus={(event) => {
         focused.current = true;
@@ -28,7 +47,11 @@ export function NumericInput({ value, onValueChange, onBlur, onFocus, ...props }
         setDraft(raw);
         if (raw.trim() === "") return;
         const parsed = Number(raw);
-        if (Number.isFinite(parsed)) onValueChange(parsed);
+        if (Number.isFinite(parsed)) {
+          const capped = maximum !== null && Number.isFinite(maximum) ? Math.min(maximum, parsed) : parsed;
+          if (capped !== parsed) setDraft(String(capped));
+          onValueChange(capped);
+        }
       }}
       onBlur={(event) => {
         focused.current = false;
@@ -38,8 +61,9 @@ export function NumericInput({ value, onValueChange, onBlur, onFocus, ...props }
         } else {
           const parsed = Number(raw);
           if (Number.isFinite(parsed)) {
-            onValueChange(parsed);
-            setDraft(String(parsed));
+            const normalized = clamp(parsed);
+            onValueChange(normalized);
+            setDraft(String(normalized));
           } else {
             setDraft(value == null ? "" : String(value));
           }

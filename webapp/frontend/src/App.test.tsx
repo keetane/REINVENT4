@@ -89,6 +89,11 @@ describe("App", () => {
     expect(Array.from(device.options).map((option) => option.text)).toEqual(["CPU", "GPU", "MPS"]);
     expect(screen.getByRole("button", { name: "ジョブを開始" }).closest(".model-selector-panel")).not.toBeNull();
     expect(screen.getByText(/1モデルあたり最大10,000件/)).toBeInTheDocument();
+    const generationCount = screen.getByLabelText("生成件数");
+    expect(generationCount).toHaveAttribute("max", "10000");
+    await user.clear(generationCount);
+    await user.type(generationCount, "10001");
+    expect(generationCount).toHaveValue(10_000);
 
     await user.selectOptions(screen.getByLabelText("Model"), "standard:mol2mol_full");
     expect(screen.getByText(/5種類の標準Mol2Molモデル/)).toBeInTheDocument();
