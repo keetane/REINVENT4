@@ -80,3 +80,16 @@ def test_parent_and_scaffold_similarity_use_the_job_parent(tmp_path: Path):
     assert dataset.rows[0].values["ScaffoldSimilarity"] == 1.0
     assert dataset.rows[1].values["ParentSimilarity"] < 1.0
     assert dataset.rows[1].values["ScaffoldSimilarity"] < 1.0
+
+
+def test_generation_model_stays_last_in_export(tmp_path: Path):
+    dataset = load_result_dataset(
+        _csv(tmp_path, "SMILES,NLL,GenerationModel\nCCO,1.2,mol2mol_high\n")
+    )
+
+    csv_text = export_csv(
+        dataset.columns, dataset.rows, (item.name for item in dataset.descriptors)
+    )
+
+    assert csv_text.splitlines()[0].split(",")[-1] == "GenerationModel"
+    assert csv_text.splitlines()[1].split(",")[-1] == "mol2mol_high"

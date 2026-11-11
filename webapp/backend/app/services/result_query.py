@@ -45,6 +45,7 @@ ROTATABLE_ALIASES = ("RotB", "RoB", "CtRotB", "CtRotBonds", "Rotatable_Bonds")
 ALL_DESCRIPTORS = REQUIRED_DESCRIPTORS + OPTIONAL_DESCRIPTORS
 MAX_ROWS = 100_000
 MAX_SCATTER_POINTS = 500
+PROVENANCE_COLUMNS = ("GenerationModel",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,8 +263,13 @@ def export_csv(
     descriptor_names: Iterable[str] = (),
 ) -> str:
     output = io.StringIO(newline="")
-    fieldnames = list(columns)
+    original_columns = list(columns)
+    provenance = [name for name in PROVENANCE_COLUMNS if name in original_columns]
+    fieldnames = [name for name in original_columns if name not in provenance]
     fieldnames.extend(name for name in descriptor_names if name not in fieldnames)
+    # Keep generation provenance at the far right even after calculated
+    # descriptors are appended by the Results download endpoint.
+    fieldnames.extend(provenance)
     writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for row in rows:

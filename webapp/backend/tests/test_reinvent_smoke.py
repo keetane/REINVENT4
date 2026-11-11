@@ -9,6 +9,7 @@ import pytest
 
 from app.db.jobs import JobRepository
 from app.models.job import JobStatus
+from app.reinvent_adapter.models import MOL2MOL_FULL_MODEL_KEYS
 from app.schemas.jobs import JobCreateRequest
 from app.services.jobs import create_job
 from app.services.naming import confined_path
@@ -68,3 +69,53 @@ def test_real_libinvent_smoke(initialized_settings):
     assert result.name.endswith("_MolGen_LibInvent_libinvent_smoke.csv")
     assert "Finished REINVENT" in log.read_text(encoding="utf-8")
     assert config.is_file()
+
+
+@pytest.mark.reinvent
+@pytest.mark.skipif(
+    os.getenv("RUN_REINVENT_SMOKE") != "1",
+    reason="set RUN_REINVENT_SMOKE=1 for the model-backed smoke test",
+)
+def test_real_mol2mol_full_smoke(initialized_settings):
+    source_root = Path(
+        os.getenv("REINVENT_SMOKE_SOURCE", "/Users/keetane/Documents/modeling/REINVENT4")
+    )
+    runtime = Path(
+        os.getenv(
+            "REINVENT_SMOKE_PYTHON", "/Users/keetane/miniforge3/envs/r4/bin/python"
+        )
+    )
+    settings = replace(
+        initialized_settings,
+        worker_runner="reinvent",
+        reinvent_runtime_python=runtime,
+        reinvent_source_root=source_root,
+    )
+    created = create_job(
+        settings,
+        JobCreateRequest(
+            parent_smiles="CCOc1ccccc1",
+            comment="full smoke",
+            run_conditions={
+                "model_id": "standard:mol2mol_full",
+                "num_smiles": 1,
+                "device": "cpu",
+                "unique_molecules": True,
+                "randomize_smiles": True,
+            },
+        ),
+    )
+
+    Worker(settings, worker_id="real-full-smoke").run_once()
+
+    completed = JobRepository(settings).get(created.id)
+    assert completed.status == JobStatus.COMPLETED
+    result = confined_path(settings.repository_root, completed.result_csv_path)
+    with result.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        rows = list(reader)
+    assert reader.fieldnames is not None
+    assert reader.fieldnames[-1] == "GenerationModel"
+    assert len(rows) == len(MOL2MOL_FULL_MODEL_KEYS)
+    assert {row["GenerationModel"] for row in rows} == set(MOL2MOL_FULL_MODEL_KEYS)
+    assert result.name.endswith("_MolGen_Mol2MolFull_full_smoke.csv")

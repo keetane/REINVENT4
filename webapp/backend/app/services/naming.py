@@ -19,6 +19,7 @@ MODEL_TYPE_LABELS = {
     "mol2mol_mmp": "Mol2MolMMP",
     "mol2mol_scaffold": "Mol2MolScaffold",
     "mol2mol_scaffold_generic": "Mol2MolScaffoldGeneric",
+    "mol2mol_full": "Mol2MolFull",
     "mol2mol_similarity": "Mol2MolSimilarity",
     "chemprop_v2": "ChempropV2",
     "qsartuna": "QSARtuna",

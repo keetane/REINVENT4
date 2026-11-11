@@ -3,6 +3,16 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
+def test_standard_models_include_mol2mol_full(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/api/models")
+
+    assert response.status_code == 200
+    full = next(item for item in response.json()["items"] if item["id"] == "standard:mol2mol_full")
+    assert full["model_type"] == "mol2mol"
+    assert full["base_model_key"] == "mol2mol_full"
+
+
 def test_upload_model_registers_and_serves_checkpoint(settings):
     with TestClient(create_app(settings)) as client:
         response = client.post(
@@ -27,6 +37,16 @@ def test_upload_model_rejects_incompatible_metadata(settings):
     with TestClient(create_app(settings)) as client:
         response = client.post(
             "/api/models/upload?name=bad&model_type=reinvent&base_model_key=mol2mol_scaffold_generic",
+            content=b"checkpoint",
+        )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "incompatible_model_metadata"
+
+
+def test_upload_model_rejects_composite_full_metadata(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.post(
+            "/api/models/upload?name=bad&model_type=mol2mol&base_model_key=mol2mol_full",
             content=b"checkpoint",
         )
     assert response.status_code == 422

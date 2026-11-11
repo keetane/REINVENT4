@@ -24,6 +24,7 @@ MODEL_LABELS = {
     "mol2mol_mmp": ("Mol2Mol MMP", "Matched molecular pair型の変換を行います。"),
     "mol2mol_scaffold": ("Mol2Mol scaffold", "Parent分子の骨格変換を行います。"),
     "mol2mol_scaffold_generic": ("Mol2Mol scaffold generic", "Transfer LearningとRLに対応する汎用Mol2Molモデルです。"),
+    "mol2mol_full": ("Mol2Mol Full", "5種類の標準Mol2Molモデルで指定件数ずつ生成し、結果を1つのCSVにまとめます。"),
     "reinvent": ("REINVENT Prior", "Parent不要でPriorから分子を生成します。"),
     "libinvent": ("LibInvent", "骨格を固定して側鎖を生成します。"),
     "linkinvent": ("LinkInvent", "側鎖を固定してリンカー骨格を生成します。"),
@@ -35,6 +36,7 @@ MAX_MODEL_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
 def list_models(request: Request) -> ModelListResponse:
     standard = []
     for key in (
+        "mol2mol_full",
         "mol2mol_high",
         "mol2mol_medium",
         "mol2mol_mmp",
@@ -113,7 +115,7 @@ async def upload_model(
             message="ファイル名から用途・種別を判定できないため、モデル情報を指定してください。",
         )
     spec = MODEL_SPECS.get(base_model_key)
-    if spec is None or spec.mode != model_type:
+    if spec is None or spec.mode != model_type or base_model_key == "mol2mol_full":
         raise AppError(status_code=422, code="incompatible_model_metadata", message="モデル種別とBase Modelの組み合わせが不正です。")
     content_length = request.headers.get("content-length")
     if content_length:

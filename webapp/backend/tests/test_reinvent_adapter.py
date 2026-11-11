@@ -1,3 +1,4 @@
+import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import pytest
 from app.db.jobs import JobRepository
 from app.errors import AppError
 from app.reinvent_adapter import AdapterConfigurationError, build_reinvent_command
+from app.reinvent_adapter.models import MOL2MOL_FULL_MODEL_KEYS, MODEL_SPECS
 from app.schemas.jobs import JobCreateRequest
 from app.services.jobs import create_job
 from app.services.naming import confined_path
@@ -18,6 +20,8 @@ def _adapter_settings(initialized_settings, tmp_path: Path):
     (source_root / "reinvent" / "__init__.py").write_text("", encoding="utf-8")
     (source_root / "priors").mkdir()
     (source_root / "priors" / "libinvent.prior").write_bytes(b"model")
+    for model_key in MOL2MOL_FULL_MODEL_KEYS:
+        (source_root / MODEL_SPECS[model_key].relative_path).write_bytes(b"model")
     runtime = tmp_path / "runtime-python"
     runtime.write_text("#!/bin/sh\n", encoding="utf-8")
     runtime.chmod(0o755)
@@ -88,6 +92,34 @@ def test_adapter_accepts_repository_model_store_path(initialized_settings, tmp_p
 
     assert command.model_path == "models/20261020_TL_test.model"
     assert str(model) in command.config_path.read_text(encoding="utf-8")
+
+
+def test_adapter_builds_all_five_mol2mol_full_runs(initialized_settings, tmp_path):
+    settings = _adapter_settings(initialized_settings, tmp_path)
+    created = create_job(
+        settings,
+        JobCreateRequest(
+            parent_smiles="CCO",
+            run_conditions={
+                "model_id": "standard:mol2mol_full",
+                "num_smiles": 7,
+                "device": "cpu",
+            },
+        ),
+    )
+
+    command = build_reinvent_command(
+        settings, created, confined_path(settings.repository_root, created.job_dir)
+    )
+
+    manifest = json.loads(command.config_path.read_text(encoding="utf-8"))
+    assert command.model_path == "mol2mol_full"
+    assert command.raw_output.name == "reinvent-raw.csv"
+    assert [run["model_key"] for run in manifest["runs"]] == list(MOL2MOL_FULL_MODEL_KEYS)
+    for run in manifest["runs"]:
+        toml = Path(run["config_path"]).read_text(encoding="utf-8")
+        assert "num_smiles = 7" in toml
+        assert 'smiles_file = ' in toml
 
 
 def test_adapter_rejects_client_selected_model_path(initialized_settings, tmp_path):

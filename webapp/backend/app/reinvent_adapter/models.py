@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+MOL2MOL_FULL_MODEL_KEYS = (
+    "mol2mol_high",
+    "mol2mol_medium",
+    "mol2mol_mmp",
+    "mol2mol_scaffold",
+    "mol2mol_scaffold_generic",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSpec:
     key: str
@@ -22,6 +31,9 @@ MODEL_SPECS: dict[str, ModelSpec] = {
             "mol2mol",
             "priors/mol2mol_scaffold_generic.prior",
         ),
+        # Composite UI model.  It is executed by the web worker against every
+        # key in MOL2MOL_FULL_MODEL_KEYS and therefore has no single checkpoint.
+        ModelSpec("mol2mol_full", "mol2mol", ""),
         ModelSpec("mol2mol_similarity", "mol2mol", "priors/mol2mol_similarity.prior"),
         ModelSpec("reinvent", "reinvent", "priors/reinvent.prior"),
         ModelSpec("libinvent", "libinvent", "priors/libinvent.prior"),

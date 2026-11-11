@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import Settings
 from app.db.jobs import JobRecord
-from app.reinvent_adapter.models import MODEL_SPECS
+from app.reinvent_adapter.models import MODEL_SPECS, MOL2MOL_FULL_MODEL_KEYS
 
 
 class AdapterConfigurationError(ValueError):
@@ -64,6 +65,113 @@ def _bounded_float(
     return parsed
 
 
+def _build_mol2mol_full_command(
+    settings: Settings,
+    job: JobRecord,
+    job_dir: Path,
+    runtime_python: Path,
+    source_root: Path,
+) -> ReinventCommand:
+    """Build one supervised command that samples every standard Mol2Mol prior."""
+    conditions = job.run_conditions
+    num_smiles = _bounded_int(
+        conditions.get("num_smiles", 100),
+        default=100,
+        minimum=1,
+        maximum=100_000,
+        name="num_smiles",
+    )
+    device = str(conditions.get("device", "cpu"))
+    if device not in {"cpu", "cuda", "mps"}:
+        raise AdapterConfigurationError("device is not allowed")
+    strategy = str(conditions.get("sample_strategy", "multinomial"))
+    if strategy not in {"beamsearch", "multinomial"}:
+        raise AdapterConfigurationError("sample_strategy is not allowed")
+    temperature = _bounded_float(
+        conditions.get("temperature", 1.0),
+        default=1.0,
+        minimum=0.0,
+        maximum=1.0,
+        name="temperature",
+    )
+    unique_molecules = _boolean(
+        conditions.get("unique_molecules", True), name="unique_molecules"
+    )
+    randomize_smiles = _boolean(
+        conditions.get("randomize_smiles", True), name="randomize_smiles"
+    )
+
+    input_file = job_dir / "input" / "parent.smi"
+    combined_output = job_dir / "output" / "reinvent-raw.csv"
+    process_log = job_dir / "logs" / "mol2mol-full.log"
+    manifest_path = job_dir / "config" / "mol2mol-full.json"
+    runs: list[dict[str, str]] = []
+    for model_key in MOL2MOL_FULL_MODEL_KEYS:
+        spec = MODEL_SPECS[model_key]
+        model_path = (source_root / spec.relative_path).resolve()
+        if not model_path.is_relative_to(source_root) or not model_path.is_file():
+            raise AdapterConfigurationError(
+                f"configured REINVENT model is missing: {model_key}"
+            )
+        raw_output = job_dir / "output" / f"reinvent-raw-{model_key}.csv"
+        public_log = job_dir / "logs" / f"reinvent-{model_key}.log"
+        json_config = job_dir / "config" / f"sampling-{model_key}.json"
+        toml_path = job_dir / "config" / f"sampling-{model_key}.toml"
+        lines = [
+            'run_type = "sampling"',
+            f"device = {_toml_string(device)}",
+            f"json_out_config = {_toml_string(json_config)}",
+            "",
+            "[parameters]",
+            f"model_file = {_toml_string(model_path)}",
+            f"output_file = {_toml_string(raw_output)}",
+            f"num_smiles = {num_smiles}",
+            f"unique_molecules = {str(unique_molecules).lower()}",
+            f"randomize_smiles = {str(randomize_smiles).lower()}",
+            f"smiles_file = {_toml_string(input_file)}",
+            f"sample_strategy = {_toml_string(strategy)}",
+        ]
+        if strategy == "multinomial":
+            lines.append(f"temperature = {temperature}")
+        toml_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        runs.append(
+            {
+                "model_key": model_key,
+                "config_path": str(toml_path),
+                "raw_output": str(raw_output),
+                "public_log": str(public_log),
+            }
+        )
+
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "runtime_python": str(runtime_python),
+                "source_root": str(source_root),
+                "job_dir": str(job_dir),
+                "combined_output": str(combined_output),
+                "runs": runs,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    runner = Path(__file__).resolve().parents[2] / "worker" / "mol2mol_full.py"
+    if not runner.is_file():
+        raise AdapterConfigurationError("Mol2Mol Full runner is missing")
+    return ReinventCommand(
+        argv=[sys.executable, str(runner), "--manifest", str(manifest_path)],
+        raw_output=combined_output,
+        process_log=process_log,
+        public_log=process_log,
+        environment={"PYTHONUNBUFFERED": "1"},
+        config_path=manifest_path,
+        model_path="mol2mol_full",
+    )
+
+
 def build_reinvent_command(
     settings: Settings, job: JobRecord, job_dir: Path
 ) -> ReinventCommand:
@@ -80,6 +188,14 @@ def build_reinvent_command(
     source_root = settings.reinvent_source_root.resolve()
     if not (source_root / "reinvent" / "__init__.py").is_file():
         raise AdapterConfigurationError("configured REINVENT source root is invalid")
+    if model_key == "mol2mol_full":
+        if conditions.get("model_id") != "standard:mol2mol_full":
+            raise AdapterConfigurationError(
+                "Mol2Mol Full is only available as a standard composite model"
+            )
+        return _build_mol2mol_full_command(
+            settings, job, job_dir, runtime_python, source_root
+        )
     resolved_model_path = str(conditions.get("resolved_model_path", model_spec.relative_path))
     repository_model_path = (settings.repository_root / resolved_model_path).resolve()
     source_model_path = (source_root / resolved_model_path).resolve()

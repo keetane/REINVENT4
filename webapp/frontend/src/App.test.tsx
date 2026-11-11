@@ -7,6 +7,7 @@ import i18n from "./i18n";
 
 const emptyJobs = { items: [], total: 0, limit: 100, offset: 0 };
 const modelItems = [
+  ["mol2mol_full", "Mol2Mol Full", "mol2mol"],
   ["mol2mol_high", "Mol2Mol high similarity", "mol2mol"],
   ["mol2mol_medium", "Mol2Mol medium", "mol2mol"],
   ["mol2mol_mmp", "Mol2Mol MMP", "mol2mol"],
@@ -87,6 +88,9 @@ describe("App", () => {
     expect(device).toHaveValue("mps");
     expect(Array.from(device.options).map((option) => option.text)).toEqual(["CPU", "GPU", "MPS"]);
     expect(screen.getByRole("button", { name: "ジョブを開始" }).closest(".model-selector-panel")).not.toBeNull();
+
+    await user.selectOptions(screen.getByLabelText("Model"), "standard:mol2mol_full");
+    expect(screen.getByText(/5種類の標準Mol2Molモデル/)).toBeInTheDocument();
   });
 
   it("explains the Transfer Learning parameters", async () => {
